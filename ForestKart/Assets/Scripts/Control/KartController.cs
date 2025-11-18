@@ -4,7 +4,9 @@ using System.Collections;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.Rendering.Universal;
-public class KartController : MonoBehaviour
+using Unity.Netcode;
+
+public class KartController : NetworkBehaviour
 {
     public float gas;
     public float brake;
@@ -36,6 +38,8 @@ public class KartController : MonoBehaviour
     }
     public void OnAccelerate(InputValue value)
     {
+        if (!IsOwner) return;
+        
         if (value.isPressed)
         {
             gas = 1;
@@ -47,6 +51,8 @@ public class KartController : MonoBehaviour
     }
     public void OnBrake(InputValue value)
     {
+        if (!IsOwner) return;
+        
         if (value.isPressed)
         {
             brake = 1;
@@ -68,10 +74,14 @@ public class KartController : MonoBehaviour
     }
     public void OnSteering(InputValue value)
     {
+        if (!IsOwner) return;
+        
         steer = value.Get<Vector2>();
     }
     public void OnReverse(InputValue value)
     {
+        if (!IsOwner) return;
+        
         if (reverse)
         {
             reverse = false;
@@ -83,10 +93,14 @@ public class KartController : MonoBehaviour
     }
     public void OnReset()
     {
+        if (!IsOwner) return;
+        
         transform.rotation = new Quaternion(0, 0, 0, 0);
     }
     public void OnDrift(InputValue value)
     {
+        if (!IsOwner) return;
+        
         drift = value.Get<Vector2>().normalized;
     }
     private void Drive(float acceleration, float brake,Vector2 steer, Vector2 drift)
