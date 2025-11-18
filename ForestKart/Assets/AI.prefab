@@ -2271,7 +2271,7 @@ MonoBehaviour:
   lookAheadDistance: 10
   speedSmoothing: 1
   speedVariation: 0.15
-  lateralRandomness: 0.5
+  lateralRandomness: 10
   speedChangeInterval: 2
   enableObstacleAvoidance: 0
   detectionDistance: 15
