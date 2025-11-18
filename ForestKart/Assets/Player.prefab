@@ -1109,7 +1109,7 @@ MonoBehaviour:
   - {fileID: 4080144182704942001}
   - {fileID: 7956593001908503740}
   DriveTorque: 100
-  BrakeTorque: 500
+  BrakeTorque: 300
   Downforce: 100
   SteerAngle: 30
   BrakeAssist: 0
