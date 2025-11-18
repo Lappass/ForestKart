@@ -26,19 +26,114 @@ public class KartController : NetworkBehaviour
     public Vector2 drift;
     private WheelFrictionCurve curve;
     private bool curveChange = false;
+    public bool controlsEnabled = false;
+    private bool hasBeenEnabled = false;
+    
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
+        if (taillight != null)
+        {
+            taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
+        }
+        
+        if (!hasBeenEnabled)
+        {
+            controlsEnabled = false;
+        }
     }
+    
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        
+        if (hasBeenEnabled && !controlsEnabled)
+        {
+            controlsEnabled = true;
+        }
+        
+        if (IsOwner)
+        {
+            StartCoroutine(SetupPlayerInputDelayed());
+        }
+    }
+    
+    private System.Collections.IEnumerator SetupPlayerInputDelayed()
+    {
+        yield return new WaitForSeconds(0.1f);
+        
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        if (playerInput != null)
+        {
+            playerInput.enabled = true;
+            playerInput.ActivateInput();
+        }
+    }
+    
     private void Update()
     {
+        if (hasBeenEnabled && !controlsEnabled)
+        {
+            controlsEnabled = true;
+        }
+        
+        if (!controlsEnabled) return;
+        
         Drive(gas, brake,steer,drift);
         AddDownForce(); 
     }
+    
+    public void EnableControls()
+    {
+        hasBeenEnabled = true;
+        controlsEnabled = true;
+        
+        if (IsOwner)
+        {
+            StartCoroutine(ActivateInputAfterDelay());
+        }
+    }
+    
+    private System.Collections.IEnumerator ActivateInputAfterDelay()
+    {
+        yield return new WaitForSeconds(0.1f);
+        
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        if (playerInput != null)
+        {
+            if (!playerInput.enabled)
+            {
+                playerInput.enabled = true;
+            }
+            playerInput.ActivateInput();
+            
+            if (playerInput.currentActionMap == null)
+            {
+                var actions = playerInput.actions;
+                if (actions != null)
+                {
+                    var driveMap = actions.FindActionMap("Drive");
+                    if (driveMap != null)
+                    {
+                        playerInput.SwitchCurrentActionMap("Drive");
+                    }
+                }
+            }
+        }
+    }
+    
+    public void DisableControls()
+    {
+        hasBeenEnabled = false;
+        controlsEnabled = false;
+        gas = 0f;
+        brake = 0f;
+        steer = Vector2.zero;
+        drift = Vector2.zero;
+    }
     public void OnAccelerate(InputValue value)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         if (value.isPressed)
         {
@@ -51,7 +146,7 @@ public class KartController : NetworkBehaviour
     }
     public void OnBrake(InputValue value)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         if (value.isPressed)
         {
@@ -74,13 +169,13 @@ public class KartController : NetworkBehaviour
     }
     public void OnSteering(InputValue value)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         steer = value.Get<Vector2>();
     }
     public void OnReverse(InputValue value)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         if (reverse)
         {
@@ -93,13 +188,13 @@ public class KartController : NetworkBehaviour
     }
     public void OnReset()
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         transform.rotation = new Quaternion(0, 0, 0, 0);
     }
     public void OnDrift(InputValue value)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !controlsEnabled) return;
         
         drift = value.Get<Vector2>().normalized;
     }

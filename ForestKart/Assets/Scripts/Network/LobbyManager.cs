@@ -67,12 +67,11 @@ public class LobbyManager : MonoBehaviour
             if (!utp) utp = FindAnyObjectByType<UnityTransport>();
             if (!utp) throw new Exception("UnityTransport not found on scene.");
 
-            // Start hosting and connect voice (if available), then notify listeners.
             OnStatus?.Invoke("Starting Host...");
             NetworkManager.Singleton.StartHost();
             VoiceManager.Instance?.ConnectOrJoin();
             OnStarted?.Invoke();
-            OnStatus?.Invoke("Host started.");
+            OnStatus?.Invoke("Host started. Click Start Race to begin.");
         }
         catch (Exception e)
         {

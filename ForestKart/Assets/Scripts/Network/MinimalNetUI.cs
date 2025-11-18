@@ -14,8 +14,15 @@ public class MinimalNetUI : MonoBehaviour
     public TMP_Text joinCodeText;
     bool subscribed;
     public Button quickJoinBtn;
+    public Button startRaceButton;
     
-    // Called when the object becomes enabled and active; wires up UI events and subscribes to LobbyManager events.
+    private GameUI gameUI;
+    
+    void Start()
+    {
+        gameUI = FindFirstObjectByType<GameUI>();
+    }
+    
     void OnEnable()
     {
         if (mgr == null) return;
@@ -30,7 +37,6 @@ public class MinimalNetUI : MonoBehaviour
         }
     }
     
-    // Called when the object becomes disabled or inactive; removes UI listeners and unsubscribes from events.
     void OnDisable()
     {
         if (mgr == null || !subscribed) return;
@@ -42,13 +48,11 @@ public class MinimalNetUI : MonoBehaviour
         subscribed = false;
     }
     
-    // Updates the status text UI with the provided status string.
     void OnStatus(string s)
     {
         if (status) status.text = s;
     }
     
-    // Displays the received join code in the UI and toggles relevant panels.
     void OnJoinCode(string code)
     {
         if (joinCodeText) joinCodeText.text = code;
@@ -56,11 +60,16 @@ public class MinimalNetUI : MonoBehaviour
         if (controlsGroup) controlsGroup.SetActive(false);
     }
     
-    // Hides the UI when a client (not host) has successfully started.
     void OnStarted()
     {
-        if (Unity.Netcode.NetworkManager.Singleton.IsClient &&
-            !Unity.Netcode.NetworkManager.Singleton.IsHost)
+        if (Unity.Netcode.NetworkManager.Singleton.IsHost)
+        {
+            if (gameUI != null && startRaceButton != null)
+            {
+                gameUI.ShowStartButton(true);
+            }
+        }
+        else if (Unity.Netcode.NetworkManager.Singleton.IsClient)
         {
             gameObject.SetActive(false);
         }
