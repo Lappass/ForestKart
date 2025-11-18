@@ -176,11 +176,17 @@ public class AIKartController : NetworkBehaviour
         float distanceTraveled = currentSpeed * Time.deltaTime;
         float normalizedDistance = distanceTraveled / splineLength;
         currentSplinePosition = (currentSplinePosition + normalizedDistance) % 1f;
-        
         Vector3 currentSplinePos = splinePath.transform.TransformPoint(
             SplineUtility.EvaluatePosition(splinePath.Spline, currentSplinePosition)
         );
         float distanceToSpline = Vector3.Distance(transform.position, currentSplinePos);
+        Vector3 toTarget = currentSplinePos - transform.position;
+        float forwardDot = Vector3.Dot(toTarget, transform.forward);
+        float reachThreshold = Mathf.Max(2f, currentSpeed * 0.2f);
+        if (distanceToSpline < reachThreshold || forwardDot < 0) {
+ 
+            currentSplinePosition = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
+        }
         
         if (distanceToSpline > 5f)
         {
@@ -223,6 +229,21 @@ public class AIKartController : NetworkBehaviour
         Vector3 splineUp = SplineUtility.EvaluateUpVector(splinePath.Spline, lookAheadT);
         Vector3 splineRight = Vector3.Cross(splineTangent, splineUp).normalized;
         Vector3 splineNormal = splineRight;
+        
+        float targetWidth = 5f; 
+        Vector3 currentSplinePosForWidth = splinePath.transform.TransformPoint(
+            SplineUtility.EvaluatePosition(splinePath.Spline, currentSplinePosition)
+        );
+        Vector3 splineTangentForWidth = splinePath.transform.TransformDirection(
+            SplineUtility.EvaluateTangent(splinePath.Spline, currentSplinePosition)
+        );
+        Vector3 toKart = transform.position - currentSplinePosForWidth;
+        float lateralDist = Vector3.Dot(toKart, Vector3.Cross(splineTangentForWidth, Vector3.up).normalized);
+        bool inTargetLine = Mathf.Abs(lateralDist) < targetWidth * 0.5f;
+        float forwardDotForWidth = Vector3.Dot(splineTangentForWidth, transform.forward);
+        if (inTargetLine && forwardDotForWidth > 0.2f) {
+            currentSplinePosition = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
+        }
         
         if (enableOvertaking)
         {
