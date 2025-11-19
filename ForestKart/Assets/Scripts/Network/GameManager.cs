@@ -2,6 +2,7 @@ using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Splines;
+using Unity.Cinemachine;
 
 public class GameManager : NetworkBehaviour
 {
@@ -23,7 +24,11 @@ public class GameManager : NetworkBehaviour
     [Header("Ranking")]
     public float rankingUpdateInterval = 0.1f;
     
+    [Header("Race Settings")]
+    public int totalLaps = 3;
+    
     private NetworkVariable<bool> gameStarted = new NetworkVariable<bool>(false);
+    private NetworkVariable<bool> gameFinished = new NetworkVariable<bool>(false);
     private NetworkVariable<float> countdownTime = new NetworkVariable<float>(0f);
     
     private float rankingUpdateTimer = 0f;
@@ -47,6 +52,7 @@ public class GameManager : NetworkBehaviour
         if (IsServer)
         {
             gameStarted.Value = false;
+            gameFinished.Value = false;
             countdownTime.Value = 0f;
         }
     }
@@ -273,6 +279,41 @@ public class GameManager : NetworkBehaviour
         }
     }
     
+    [ClientRpc]
+    private void DisableAllControlsClientRpc()
+    {
+        foreach (var client in NetworkManager.Singleton.ConnectedClients)
+        {
+            if (client.Value.PlayerObject != null)
+            {
+                KartController kart = client.Value.PlayerObject.GetComponentInChildren<KartController>();
+                if (kart != null)
+                {
+                    kart.DisableControls();
+                }
+
+                UnityEngine.InputSystem.PlayerInput playerInput = client.Value.PlayerObject.GetComponent<UnityEngine.InputSystem.PlayerInput>();
+                if (playerInput != null)
+                {
+                    playerInput.enabled = false;
+                }
+            }
+        }
+
+        if (IsServer)
+        {
+            AIKartController[] aiKarts = FindObjectsByType<AIKartController>(FindObjectsSortMode.None);
+            foreach (var ai in aiKarts)
+            {
+                KartController aiKart = ai.GetComponent<KartController>();
+                if (aiKart != null)
+                {
+                    aiKart.DisableControls();
+                }
+            }
+        }
+    }
+    
     public float GetCountdownTime()
     {
         return countdownTime.Value;
@@ -283,21 +324,151 @@ public class GameManager : NetworkBehaviour
         return gameStarted.Value;
     }
     
+    public bool IsGameFinished()
+    {
+        return gameFinished.Value;
+    }
+    
     void Update()
     {
-        if (IsServer && gameStarted.Value && countdownTime.Value <= 0f)
+        if (IsServer && gameStarted.Value && !gameFinished.Value && countdownTime.Value <= 0f)
         {
             rankingUpdateTimer += Time.deltaTime;
             if (rankingUpdateTimer >= rankingUpdateInterval)
             {
                 rankingUpdateTimer = 0f;
                 UpdateRankings();
+                CheckRaceFinish();
             }
         }
     }
     
     private void UpdateRankings()
     {
+    }
+    
+    private void CheckRaceFinish()
+    {
+        if (gameFinished.Value) return;
+        
+        Transform winnerTransform = null;
+        
+        foreach (var client in NetworkManager.Singleton.ConnectedClients)
+        {
+            if (client.Value.PlayerObject != null)
+            {
+                PlayerProgressTracker tracker = client.Value.PlayerObject.GetComponent<PlayerProgressTracker>();
+                if (tracker == null)
+                {
+                    tracker = client.Value.PlayerObject.GetComponentInChildren<PlayerProgressTracker>();
+                }
+                
+                if (tracker != null && tracker.GetLapCount() >= totalLaps)
+                {
+                    winnerTransform = client.Value.PlayerObject.transform;
+                    FinishRace(winnerTransform);
+                    return;
+                }
+            }
+        }
+        
+        AIKartController[] aiKarts = FindObjectsByType<AIKartController>(FindObjectsSortMode.None);
+        foreach (var aiKart in aiKarts)
+        {
+            if (aiKart != null && aiKart.GetLapCount() >= totalLaps)
+            {
+                winnerTransform = aiKart.transform;
+                FinishRace(winnerTransform);
+                return;
+            }
+        }
+    }
+    
+    private void FinishRace(Transform winner)
+    {
+        if (gameFinished.Value) return;
+        
+        gameFinished.Value = true;
+        FocusAllCamerasOnWinnerClientRpc(winner.GetComponent<NetworkObject>());
+        
+        Debug.Log("Race finished! A player completed 3 laps.");
+    }
+    
+    [ClientRpc]
+    private void FocusAllCamerasOnWinnerClientRpc(NetworkObjectReference winnerRef)
+    {
+        if (!winnerRef.TryGet(out NetworkObject winnerObj) || winnerObj == null) return;
+        
+        Transform winnerParent = winnerObj.transform.parent;
+        if (winnerParent == null)
+        {
+            winnerParent = winnerObj.transform;
+        }
+        
+        CinemachineCamera winnerCamera = winnerParent.GetComponentInChildren<CinemachineCamera>();
+        if (winnerCamera == null)
+        {
+            Debug.LogWarning("[GameManager] Could not find CinemachineCamera in winner's parent hierarchy");
+            return;
+        }
+        
+        var cinemachineFollow = winnerCamera.GetComponent<CinemachineFollow>();
+        if (cinemachineFollow != null)
+        {
+            System.Reflection.FieldInfo followOffsetField = null;
+            object targetObject = null;
+            
+            var targetTrackerField = typeof(CinemachineFollow).GetField("m_TargetTracker", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (targetTrackerField != null)
+            {
+                var targetTracker = targetTrackerField.GetValue(cinemachineFollow);
+                if (targetTracker != null)
+                {
+                    var trackerType = targetTracker.GetType();
+                    var settingsProp = trackerType.GetProperty("Settings", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    
+                    if (settingsProp != null)
+                    {
+                        var settings = settingsProp.GetValue(targetTracker);
+                        if (settings != null)
+                        {
+                            followOffsetField = settings.GetType().GetField("FollowOffset", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                            targetObject = settings;
+                        }
+                    }
+                    
+                    if (followOffsetField == null)
+                    {
+                        var settingsField = trackerType.GetField("Settings", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (settingsField != null)
+                        {
+                            var settings = settingsField.GetValue(targetTracker);
+                            if (settings != null)
+                            {
+                                followOffsetField = settings.GetType().GetField("FollowOffset", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                if (followOffsetField != null)
+                                {
+                                    Vector3 newOffset = new Vector3(5f, 4f, 10f);
+                                    followOffsetField.SetValue(settings, newOffset);
+                                    settingsField.SetValue(targetTracker, settings);
+                                    targetTrackerField.SetValue(cinemachineFollow, targetTracker);
+                                }
+                            }
+                        }
+                    }
+                    else if (followOffsetField != null && targetObject != null)
+                    {
+                        Vector3 newOffset = new Vector3(5f, 4f, 10f);
+                        followOffsetField.SetValue(targetObject, newOffset);
+                        if (settingsProp != null && settingsProp.CanWrite)
+                        {
+                            settingsProp.SetValue(targetTracker, targetObject);
+                        }
+                        targetTrackerField.SetValue(cinemachineFollow, targetTracker);
+                    }
+                }
+            }
+        }
     }
     
     public int GetPlayerRank(NetworkObject playerObject)

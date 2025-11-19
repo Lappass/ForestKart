@@ -13,11 +13,10 @@ public class PlayerProgressTracker : NetworkBehaviour
     private Rigidbody rb;
     private int lapCount = 0;
     private float totalProgress = 0f;
+    private float lastSplinePosition = 0f;
     
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
-    
-    private float checkPointThreshold = 0.98f;
     
     void Start()
     {
@@ -40,18 +39,22 @@ public class PlayerProgressTracker : NetworkBehaviour
         
         UpdateSplinePosition();
         
-        if (currentSplinePosition > checkPointThreshold && networkSplinePosition.Value < 0.1f && lapCount == networkLapCount.Value)
-        {
-            lapCount++;
-            networkLapCount.Value = lapCount;
-        }
-        
         if (IsServer)
         {
+            if (lastSplinePosition > 0.9f && currentSplinePosition < 0.1f)
+            {
+                lapCount++;
+                networkLapCount.Value = lapCount;
+            }
+            lastSplinePosition = currentSplinePosition;
+            
             networkSplinePosition.Value = currentSplinePosition;
+            totalProgress = lapCount + currentSplinePosition;
         }
-        
-        totalProgress = lapCount + currentSplinePosition;
+        else
+        {
+            totalProgress = networkLapCount.Value + networkSplinePosition.Value;
+        }
     }
     
     private void UpdateSplinePosition()
@@ -110,7 +113,9 @@ public class PlayerProgressTracker : NetworkBehaviour
         }
         else
         {
-            return networkLapCount.Value + networkSplinePosition.Value;
+            int clientLapCount = networkLapCount.Value;
+            float clientPosition = networkSplinePosition.Value;
+            return clientLapCount + clientPosition;
         }
     }
     

@@ -967,6 +967,7 @@ GameObject:
   - component: {fileID: 2878455962770544421}
   - component: {fileID: 1082661002892278524}
   - component: {fileID: 3795762509149656223}
+  - component: {fileID: 988418962322781963}
   m_Layer: 2
   m_Name: 4x4_Player
   m_TagString: Untagged
@@ -1119,6 +1120,7 @@ MonoBehaviour:
   taillight: {fileID: 3808312120602600597}
   drift: {x: 0, y: 0}
   controlsEnabled: 0
+  centerOfMassOffset: {x: 0, y: -0.5, z: 0}
 --- !u!114 &3795762509149656223
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1133,6 +1135,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
   splinePath: {fileID: 0}
+--- !u!114 &988418962322781963
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2808542796244286539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkRigidbodyBaseExpanded: 0
+  UseRigidBodyForMotion: 0
+  AutoUpdateKinematicState: 1
+  AutoSetKinematicOnDespawn: 1
 --- !u!1 &3206082810977452450
 GameObject:
   m_ObjectHideFlags: 0

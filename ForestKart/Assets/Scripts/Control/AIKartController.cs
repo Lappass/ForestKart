@@ -691,6 +691,18 @@ public class AIKartController : NetworkBehaviour
         }
     }
     
+    public int GetLapCount()
+    {
+        if (IsServer)
+        {
+            return lapCount;
+        }
+        else
+        {
+            return networkLapCount.Value;
+        }
+    }
+    
     public float GetSplinePosition()
     {
         if (IsServer)

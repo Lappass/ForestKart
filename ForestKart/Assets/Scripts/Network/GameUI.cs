@@ -12,6 +12,9 @@ public class GameUI : MonoBehaviour
     [Header("Ranking UI")]
     public TextMeshProUGUI rankingText;
     
+    [Header("Lap UI")]
+    public TextMeshProUGUI lapText;
+    
     private GameManager gameManager;
     
     void Start()
@@ -36,6 +39,11 @@ public class GameUI : MonoBehaviour
         if (rankingText != null)
         {
             rankingText.text = "";
+        }
+        
+        if (lapText != null)
+        {
+            lapText.text = "";
         }
     }
     
@@ -81,6 +89,7 @@ public class GameUI : MonoBehaviour
                 }
                 
                 UpdateRankingDisplay();
+                UpdateLapDisplay();
             }
         }
         else
@@ -88,6 +97,11 @@ public class GameUI : MonoBehaviour
             if (rankingText != null)
             {
                 rankingText.text = "";
+            }
+            
+            if (lapText != null)
+            {
+                lapText.text = "";
             }
         }
     }
@@ -103,6 +117,28 @@ public class GameUI : MonoBehaviour
         int totalVehicles = gameManager.GetTotalVehicleCount();
         
         rankingText.text = $"{rank}/{totalVehicles}";
+    }
+    
+    private void UpdateLapDisplay()
+    {
+        if (gameManager == null || lapText == null) return;
+        
+        Unity.Netcode.NetworkObject localPlayerObject = Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayerObject == null) return;
+        
+        PlayerProgressTracker tracker = localPlayerObject.GetComponent<PlayerProgressTracker>();
+        if (tracker == null)
+        {
+            tracker = localPlayerObject.GetComponentInChildren<PlayerProgressTracker>();
+        }
+        
+        if (tracker != null)
+        {
+            int currentLap = tracker.GetLapCount();
+            int totalLaps = gameManager.totalLaps;
+            
+            lapText.text = $"{currentLap}/{totalLaps}";
+        }
     }
     
     private void OnStartRaceClicked()
