@@ -35,6 +35,9 @@ public class KartController : NetworkBehaviour
     {
         rb = GetComponent<Rigidbody>();
         rb.centerOfMass += centerOfMassOffset;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.maxAngularVelocity = 7f;
+        
         if (taillight != null)
         {
             taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
@@ -49,6 +52,12 @@ public class KartController : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        
+        if (rb != null)
+        {
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            rb.maxAngularVelocity = 7f;
+        }
         
         if (hasBeenEnabled && !controlsEnabled)
         {
@@ -284,6 +293,22 @@ public class KartController : NetworkBehaviour
         {
             rb.AddForce(-transform.up * Downforce * rb.linearVelocity.magnitude);
         }
+        
+        if (IsServer || IsOwner)
+        {
+            if (rb.linearVelocity.y > 2f && !grounded)
+            {
+                rb.AddForce(Vector3.down * 500f);
+            }
+            
+            if (rb.linearVelocity.y > 8f)
+            {
+                Vector3 velocity = rb.linearVelocity;
+                velocity.y = Mathf.Clamp(velocity.y, -10f, 8f);
+                rb.linearVelocity = velocity;
+            }
+        }
+        
         for (int i = 2; i < driveWheels.Length; i++)
         {
             WheelHit wheelHit;

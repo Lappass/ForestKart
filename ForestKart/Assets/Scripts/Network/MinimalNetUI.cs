@@ -69,9 +69,5 @@ public class MinimalNetUI : MonoBehaviour
                 gameUI.ShowStartButton(true);
             }
         }
-        else if (Unity.Netcode.NetworkManager.Singleton.IsClient)
-        {
-            gameObject.SetActive(false);
-        }
     }
 }
