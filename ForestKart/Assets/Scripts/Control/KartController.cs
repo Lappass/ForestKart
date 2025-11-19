@@ -28,10 +28,13 @@ public class KartController : NetworkBehaviour
     private bool curveChange = false;
     public bool controlsEnabled = false;
     private bool hasBeenEnabled = false;
+    [Header("Stability")]
+    public Vector3 centerOfMassOffset = new Vector3(0f, -0.5f, 0f);
     
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        rb.centerOfMass += centerOfMassOffset;
         if (taillight != null)
         {
             taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
