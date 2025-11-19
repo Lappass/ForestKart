@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Splines;
@@ -30,8 +32,10 @@ public class GameManager : NetworkBehaviour
     private NetworkVariable<bool> gameStarted = new NetworkVariable<bool>(false);
     private NetworkVariable<bool> gameFinished = new NetworkVariable<bool>(false);
     private NetworkVariable<float> countdownTime = new NetworkVariable<float>(0f);
+    private NetworkVariable<bool> showLeaderboard = new NetworkVariable<bool>(false);
     
     private float rankingUpdateTimer = 0f;
+    private HashSet<NetworkObject> finishedPlayers = new HashSet<NetworkObject>();
     
     public static GameManager Instance { get; private set; }
     
@@ -54,7 +58,11 @@ public class GameManager : NetworkBehaviour
             gameStarted.Value = false;
             gameFinished.Value = false;
             countdownTime.Value = 0f;
+            showLeaderboard.Value = false;
+            finishedPlayers.Clear();
         }
+        
+        showLeaderboard.OnValueChanged += OnShowLeaderboardChanged;
     }
     
     [ServerRpc(RequireOwnership = false)]
@@ -331,14 +339,18 @@ public class GameManager : NetworkBehaviour
     
     void Update()
     {
-        if (IsServer && gameStarted.Value && !gameFinished.Value && countdownTime.Value <= 0f)
+        if (IsServer && gameStarted.Value && countdownTime.Value <= 0f)
         {
             rankingUpdateTimer += Time.deltaTime;
             if (rankingUpdateTimer >= rankingUpdateInterval)
             {
                 rankingUpdateTimer = 0f;
                 UpdateRankings();
-                CheckRaceFinish();
+                
+                if (!gameFinished.Value)
+                {
+                    CheckRaceFinish();
+                }
             }
         }
     }
@@ -352,6 +364,7 @@ public class GameManager : NetworkBehaviour
         if (gameFinished.Value) return;
         
         Transform winnerTransform = null;
+        bool foundNewFinisher = false;
         
         foreach (var client in NetworkManager.Singleton.ConnectedClients)
         {
@@ -365,9 +378,16 @@ public class GameManager : NetworkBehaviour
                 
                 if (tracker != null && tracker.GetLapCount() >= totalLaps)
                 {
-                    winnerTransform = client.Value.PlayerObject.transform;
-                    FinishRace(winnerTransform);
-                    return;
+                    NetworkObject playerObj = client.Value.PlayerObject;
+                    if (!finishedPlayers.Contains(playerObj))
+                    {
+                        finishedPlayers.Add(playerObj);
+                        foundNewFinisher = true;
+                        if (winnerTransform == null)
+                        {
+                            winnerTransform = playerObj.transform;
+                        }
+                    }
                 }
             }
         }
@@ -377,9 +397,30 @@ public class GameManager : NetworkBehaviour
         {
             if (aiKart != null && aiKart.GetLapCount() >= totalLaps)
             {
-                winnerTransform = aiKart.transform;
-                FinishRace(winnerTransform);
-                return;
+                NetworkObject aiObj = aiKart.GetComponent<NetworkObject>();
+                if (aiObj != null && !finishedPlayers.Contains(aiObj))
+                {
+                    finishedPlayers.Add(aiObj);
+                    foundNewFinisher = true;
+                    if (winnerTransform == null)
+                    {
+                        winnerTransform = aiKart.transform;
+                    }
+                }
+            }
+        }
+        
+        if (foundNewFinisher)
+        {
+            ShowLeaderboardClientRpc();
+            
+            int totalVehicles = GetTotalVehicleCount();
+            if (finishedPlayers.Count >= totalVehicles)
+            {
+                if (winnerTransform != null)
+                {
+                    FinishRace(winnerTransform);
+                }
             }
         }
     }
@@ -391,7 +432,7 @@ public class GameManager : NetworkBehaviour
         gameFinished.Value = true;
         FocusAllCamerasOnWinnerClientRpc(winner.GetComponent<NetworkObject>());
         
-        Debug.Log("Race finished! A player completed 3 laps.");
+        Debug.Log("Race finished! All players completed the race.");
     }
     
     [ClientRpc]
@@ -472,6 +513,140 @@ public class GameManager : NetworkBehaviour
         int playerCount = NetworkManager.Singleton.ConnectedClientsIds.Count;
         int aiCount = FindObjectsByType<AIKartController>(FindObjectsSortMode.None).Length;
         return playerCount + aiCount;
+    }
+    
+    public List<LeaderboardEntry> GetAllPlayerRankings()
+    {
+        List<LeaderboardEntry> entries = new List<LeaderboardEntry>();
+        
+        foreach (var client in NetworkManager.Singleton.ConnectedClients)
+        {
+            if (client.Value.PlayerObject != null)
+            {
+                NetworkObject playerObj = client.Value.PlayerObject;
+                PlayerProgressTracker tracker = playerObj.GetComponent<PlayerProgressTracker>();
+                if (tracker == null)
+                {
+                    tracker = playerObj.GetComponentInChildren<PlayerProgressTracker>();
+                }
+                
+                if (tracker != null)
+                {
+                    LeaderboardEntry entry = new LeaderboardEntry
+                    {
+                        networkObject = playerObj,
+                        playerName = GetPlayerName(playerObj),
+                        progress = tracker.GetTotalProgress(),
+                        lapCount = tracker.GetLapCount(),
+                        isFinished = finishedPlayers.Contains(playerObj),
+                        isPlayer = true,
+                        isAI = false
+                    };
+                    entries.Add(entry);
+                }
+            }
+        }
+        
+        AIKartController[] aiKarts = FindObjectsByType<AIKartController>(FindObjectsSortMode.None);
+        foreach (var aiKart in aiKarts)
+        {
+            if (aiKart != null)
+            {
+                NetworkObject aiObj = aiKart.GetComponent<NetworkObject>();
+                if (aiObj == null)
+                {
+                    aiObj = aiKart.GetComponentInParent<NetworkObject>();
+                }
+                if (aiObj == null)
+                {
+                    aiObj = aiKart.GetComponentInChildren<NetworkObject>();
+                }
+                
+                if (aiObj != null && aiObj.IsSpawned)
+                {
+                    LeaderboardEntry entry = new LeaderboardEntry
+                    {
+                        networkObject = aiObj,
+                        playerName = GetAIName(aiKart),
+                        progress = aiKart.GetTotalProgress(),
+                        lapCount = aiKart.GetLapCount(),
+                        isFinished = finishedPlayers.Contains(aiObj),
+                        isPlayer = false,
+                        isAI = true
+                    };
+                    entries.Add(entry);
+                }
+            }
+        }
+        
+        entries.Sort((a, b) =>
+        {
+            if (a.isFinished != b.isFinished)
+            {
+                return b.isFinished.CompareTo(a.isFinished);
+            }
+            
+            return b.progress.CompareTo(a.progress);
+        });
+        
+        for (int i = 0; i < entries.Count; i++)
+        {
+            entries[i].rank = i + 1;
+        }
+        
+        return entries;
+    }
+    
+    private string GetPlayerName(NetworkObject playerObj)
+    {
+        string name = playerObj.name;
+        
+        if (name.Contains("(Clone)"))
+        {
+            name = name.Replace("(Clone)", "").Trim();
+        }
+        
+        if (playerObj.IsOwner)
+        {
+            name = "Player " + name;
+        }
+        
+        return name;
+    }
+    
+    private string GetAIName(AIKartController aiKart)
+    {
+        string name = aiKart.name;
+        
+        if (name.Contains("(Clone)"))
+        {
+            name = name.Replace("(Clone)", "").Trim();
+        }
+        
+        return name;
+    }
+    
+    [ClientRpc]
+    private void ShowLeaderboardClientRpc()
+    {
+        showLeaderboard.Value = true;
+    }
+    
+    private void OnShowLeaderboardChanged(bool oldValue, bool newValue)
+    {
+        if (newValue)
+        {
+            LeaderboardUI leaderboardUI = FindFirstObjectByType<LeaderboardUI>();
+            if (leaderboardUI != null)
+            {
+                leaderboardUI.ShowLeaderboard();
+            }
+        }
+    }
+    
+    public bool ShouldShowLeaderboard()
+    {
+        return showLeaderboard.Value;
     }
     
 }
