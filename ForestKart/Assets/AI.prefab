@@ -2270,8 +2270,8 @@ MonoBehaviour:
   steerSensitivity: 0.58
   lookAheadDistance: 10
   speedSmoothing: 1
-  speedVariation: 0.15
-  lateralRandomness: 10
+  speedVariation: 0.3
+  lateralRandomness: 5
   speedChangeInterval: 2
   enableObstacleAvoidance: 0
   detectionDistance: 15
