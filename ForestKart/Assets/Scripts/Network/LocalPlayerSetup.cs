@@ -6,6 +6,23 @@ public class LocalPlayerSetup : NetworkBehaviour
     public CinemachineCamera cinemachineCamera;
     public AudioListener audioListener;
     public GameObject[] localOnlyObjects;
+    
+    public void UpdateCameraReference(CinemachineCamera newCamera)
+    {
+        if (newCamera == null) return;
+        
+        if (cinemachineCamera != null && cinemachineCamera != newCamera)
+        {
+            cinemachineCamera.enabled = false;
+            cinemachineCamera.gameObject.SetActive(false);
+        }
+        
+        cinemachineCamera = newCamera;
+        cinemachineCamera.enabled = true;
+        cinemachineCamera.gameObject.SetActive(true);
+        
+        Debug.Log($"[LocalPlayerSetup] Camera reference updated to: {newCamera.name}");
+    }
 
     public override void OnNetworkSpawn()
     {

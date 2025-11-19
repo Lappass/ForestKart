@@ -62,11 +62,24 @@ public class MinimalNetUI : MonoBehaviour
     
     void OnStarted()
     {
+        if (controlsGroup != null)
+        {
+            controlsGroup.SetActive(false);
+            Debug.Log("[MinimalNetUI] Controls group hidden");
+        }
+        
         if (Unity.Netcode.NetworkManager.Singleton.IsHost)
         {
             if (gameUI != null && startRaceButton != null)
             {
                 gameUI.ShowStartButton(true);
+            }
+        }
+        else
+        {
+            if (startRaceButton != null)
+            {
+                startRaceButton.gameObject.SetActive(false);
             }
         }
     }

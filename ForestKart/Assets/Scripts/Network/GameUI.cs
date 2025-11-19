@@ -49,6 +49,11 @@ public class GameUI : MonoBehaviour
     
     void Update()
     {
+        if (gameManager == null)
+        {
+            gameManager = GameManager.Instance;
+        }
+        
         if (gameManager != null && gameManager.IsGameStarted())
         {
             float countdown = gameManager.GetCountdownTime();
@@ -96,12 +101,12 @@ public class GameUI : MonoBehaviour
         {
             if (rankingText != null)
             {
-                rankingText.text = "";
+                rankingText.text = "-/-";
             }
             
             if (lapText != null)
             {
-                lapText.text = "";
+                lapText.text = "0/3";
             }
         }
     }
@@ -110,21 +115,37 @@ public class GameUI : MonoBehaviour
     {
         if (gameManager == null || rankingText == null) return;
         
-        Unity.Netcode.NetworkObject localPlayerObject = Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject;
-        if (localPlayerObject == null) return;
+        Unity.Netcode.NetworkObject localPlayerObject = GetLocalPlayerObject();
+        if (localPlayerObject == null)
+        {
+            rankingText.text = "-/-";
+            return;
+        }
         
-        int rank = gameManager.GetPlayerRank(localPlayerObject);
-        int totalVehicles = gameManager.GetTotalVehicleCount();
-        
-        rankingText.text = $"{rank}/{totalVehicles}";
+        try
+        {
+            int rank = gameManager.GetPlayerRank(localPlayerObject);
+            int totalVehicles = gameManager.GetTotalVehicleCount();
+            
+            rankingText.text = $"{rank}/{totalVehicles}";
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[GameUI] Error updating ranking display: {e.Message}");
+            rankingText.text = "-/-";
+        }
     }
     
     private void UpdateLapDisplay()
     {
         if (gameManager == null || lapText == null) return;
         
-        Unity.Netcode.NetworkObject localPlayerObject = Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject;
-        if (localPlayerObject == null) return;
+        Unity.Netcode.NetworkObject localPlayerObject = GetLocalPlayerObject();
+        if (localPlayerObject == null)
+        {
+            lapText.text = "0/3";
+            return;
+        }
         
         PlayerProgressTracker tracker = localPlayerObject.GetComponent<PlayerProgressTracker>();
         if (tracker == null)
@@ -134,11 +155,71 @@ public class GameUI : MonoBehaviour
         
         if (tracker != null)
         {
-            int currentLap = tracker.GetLapCount();
-            int totalLaps = gameManager.totalLaps;
-            
-            lapText.text = $"{currentLap}/{totalLaps}";
+            try
+            {
+                int currentLap = tracker.GetLapCount();
+                int totalLaps = gameManager.totalLaps;
+                
+                lapText.text = $"{currentLap}/{totalLaps}";
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[GameUI] Error updating lap display: {e.Message}");
+                lapText.text = "0/3";
+            }
         }
+        else
+        {
+            lapText.text = "0/3";
+        }
+    }
+    
+    private Unity.Netcode.NetworkObject GetLocalPlayerObject()
+    {
+        var networkManager = Unity.Netcode.NetworkManager.Singleton;
+        if (networkManager == null || !networkManager.IsClient) return null;
+        
+        if (networkManager.LocalClient != null && networkManager.LocalClient.PlayerObject != null)
+        {
+            return networkManager.LocalClient.PlayerObject;
+        }
+        
+        if (networkManager.ConnectedClients.ContainsKey(networkManager.LocalClientId))
+        {
+            var localClient = networkManager.ConnectedClients[networkManager.LocalClientId];
+            if (localClient != null && localClient.PlayerObject != null)
+            {
+                return localClient.PlayerObject;
+            }
+        }
+        
+        foreach (var client in networkManager.ConnectedClients)
+        {
+            if (client.Value.ClientId == networkManager.LocalClientId && client.Value.PlayerObject != null)
+            {
+                return client.Value.PlayerObject;
+            }
+        }
+        
+        Unity.Netcode.NetworkObject[] allNetworkObjects = FindObjectsByType<Unity.Netcode.NetworkObject>(FindObjectsSortMode.None);
+        foreach (var netObj in allNetworkObjects)
+        {
+            if (netObj != null && netObj.IsSpawned && netObj.IsOwner)
+            {
+                PlayerProgressTracker tracker = netObj.GetComponent<PlayerProgressTracker>();
+                if (tracker == null)
+                {
+                    tracker = netObj.GetComponentInChildren<PlayerProgressTracker>();
+                }
+                
+                if (tracker != null)
+                {
+                    return netObj;
+                }
+            }
+        }
+        
+        return null;
     }
     
     private void OnStartRaceClicked()

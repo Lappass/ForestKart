@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.Rendering.Universal;
 using Unity.Netcode;
+using Unity.Cinemachine;
 
 public class KartController : NetworkBehaviour
 {
@@ -28,8 +29,13 @@ public class KartController : NetworkBehaviour
     private bool curveChange = false;
     public bool controlsEnabled = false;
     private bool hasBeenEnabled = false;
+    
     [Header("Stability")]
     public Vector3 centerOfMassOffset = new Vector3(0f, -0.5f, 0f);
+    
+    [Header("Camera Settings")]
+    public CinemachineCamera drivingCamera;
+    public CinemachineCamera finishLineCamera;
     
     void Start()
     {
@@ -68,6 +74,47 @@ public class KartController : NetworkBehaviour
         {
             StartCoroutine(SetupPlayerInputDelayed());
         }
+    }
+    
+    public void AdjustCameraForRaceFinish()
+    {
+        if (!IsOwner)
+        {
+            Debug.Log("[KartController] Not Owner, skipping camera switch");
+            return;
+        }
+        
+        Debug.Log("[KartController] Switching camera: driving -> finish line");
+        
+        if (drivingCamera != null)
+        {
+            drivingCamera.gameObject.SetActive(false);
+            Debug.Log($"[KartController] Disabled driving camera: {drivingCamera.name}");
+        }
+        else
+        {
+            Debug.LogWarning("[KartController] Driving camera not found!");
+        }
+        
+        if (finishLineCamera != null)
+        {
+            finishLineCamera.gameObject.SetActive(true);
+            finishLineCamera.enabled = true;
+            Debug.Log($"[KartController] Enabled finish line camera: {finishLineCamera.name}");
+        }
+        else
+        {
+            Debug.LogWarning("[KartController] Finish line camera not found!");
+        }
+        
+        var localPlayerSetup = GetComponentInParent<LocalPlayerSetup>();
+        if (localPlayerSetup != null)
+        {
+            localPlayerSetup.UpdateCameraReference(finishLineCamera);
+            Debug.Log("[KartController] Updated LocalPlayerSetup camera reference");
+        }
+        
+        Debug.Log("[KartController] Camera switch complete");
     }
     
     private System.Collections.IEnumerator SetupPlayerInputDelayed()

@@ -14,13 +14,17 @@ public class PlayerProgressTracker : NetworkBehaviour
     private int lapCount = 0;
     private float totalProgress = 0f;
     private float lastSplinePosition = 0f;
+    private bool hasFinishedRace = false;
     
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
     
+    private KartController kartController;
+    
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        kartController = GetComponent<KartController>();
         
         if (splinePath == null)
         {
@@ -54,6 +58,24 @@ public class PlayerProgressTracker : NetworkBehaviour
         else
         {
             totalProgress = networkLapCount.Value + networkSplinePosition.Value;
+        }
+        
+        if (IsOwner && !hasFinishedRace)
+        {
+            int currentLaps = GetLapCount();
+            int totalLaps = 3;
+            
+            if (GameManager.Instance != null)
+            {
+                totalLaps = GameManager.Instance.totalLaps;
+            }
+            
+            if (currentLaps >= totalLaps)
+            {
+                Debug.Log($"[PlayerProgressTracker] Completed {currentLaps} laps (required {totalLaps}), switching camera...");
+                hasFinishedRace = true;
+                AdjustCameraForFinish();
+            }
         }
     }
     
@@ -141,6 +163,15 @@ public class PlayerProgressTracker : NetworkBehaviour
         {
             return networkSplinePosition.Value;
         }
+    }
+    
+    private void AdjustCameraForFinish()
+    {
+        if (kartController == null) return;
+        
+        kartController.AdjustCameraForRaceFinish();
+        
+        Debug.Log($"[PlayerProgressTracker] Player completed 3 laps, adjusting camera");
     }
 }
 

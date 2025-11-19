@@ -67,6 +67,13 @@ public class LobbyManager : MonoBehaviour
             if (!utp) utp = FindAnyObjectByType<UnityTransport>();
             if (!utp) throw new Exception("UnityTransport not found on scene.");
 
+            if (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient)
+            {
+                Debug.LogWarning("[LobbyManager] NetworkManager already running, shutting down...");
+                NetworkManager.Singleton.Shutdown();
+                await Task.Delay(100);
+            }
+            
             OnStatus?.Invoke("Starting Host...");
             NetworkManager.Singleton.StartHost();
             VoiceManager.Instance?.ConnectOrJoin();
@@ -109,6 +116,13 @@ public class LobbyManager : MonoBehaviour
             if (!utp) utp = FindAnyObjectByType<UnityTransport>();
             if (!utp) throw new Exception("UnityTransport not found on scene.");
 
+            if (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient)
+            {
+                Debug.LogWarning("[LobbyManager] NetworkManager already running, shutting down...");
+                NetworkManager.Singleton.Shutdown();
+                await Task.Delay(100);
+            }
+            
             // Start the client and connect voice (if available), then notify listeners.
             OnStatus?.Invoke("Starting Client");
             NetworkManager.Singleton.StartClient();

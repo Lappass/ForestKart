@@ -399,76 +399,7 @@ public class GameManager : NetworkBehaviour
     {
         if (!winnerRef.TryGet(out NetworkObject winnerObj) || winnerObj == null) return;
         
-        Transform winnerParent = winnerObj.transform.parent;
-        if (winnerParent == null)
-        {
-            winnerParent = winnerObj.transform;
-        }
-        
-        CinemachineCamera winnerCamera = winnerParent.GetComponentInChildren<CinemachineCamera>();
-        if (winnerCamera == null)
-        {
-            Debug.LogWarning("[GameManager] Could not find CinemachineCamera in winner's parent hierarchy");
-            return;
-        }
-        
-        var cinemachineFollow = winnerCamera.GetComponent<CinemachineFollow>();
-        if (cinemachineFollow != null)
-        {
-            System.Reflection.FieldInfo followOffsetField = null;
-            object targetObject = null;
-            
-            var targetTrackerField = typeof(CinemachineFollow).GetField("m_TargetTracker", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (targetTrackerField != null)
-            {
-                var targetTracker = targetTrackerField.GetValue(cinemachineFollow);
-                if (targetTracker != null)
-                {
-                    var trackerType = targetTracker.GetType();
-                    var settingsProp = trackerType.GetProperty("Settings", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (settingsProp != null)
-                    {
-                        var settings = settingsProp.GetValue(targetTracker);
-                        if (settings != null)
-                        {
-                            followOffsetField = settings.GetType().GetField("FollowOffset", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                            targetObject = settings;
-                        }
-                    }
-                    
-                    if (followOffsetField == null)
-                    {
-                        var settingsField = trackerType.GetField("Settings", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (settingsField != null)
-                        {
-                            var settings = settingsField.GetValue(targetTracker);
-                            if (settings != null)
-                            {
-                                followOffsetField = settings.GetType().GetField("FollowOffset", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                if (followOffsetField != null)
-                                {
-                                    Vector3 newOffset = new Vector3(5f, 4f, 10f);
-                                    followOffsetField.SetValue(settings, newOffset);
-                                    settingsField.SetValue(targetTracker, settings);
-                                    targetTrackerField.SetValue(cinemachineFollow, targetTracker);
-                                }
-                            }
-                        }
-                    }
-                    else if (followOffsetField != null && targetObject != null)
-                    {
-                        Vector3 newOffset = new Vector3(5f, 4f, 10f);
-                        followOffsetField.SetValue(targetObject, newOffset);
-                        if (settingsProp != null && settingsProp.CanWrite)
-                        {
-                            settingsProp.SetValue(targetTracker, targetObject);
-                        }
-                        targetTrackerField.SetValue(cinemachineFollow, targetTracker);
-                    }
-                }
-            }
-        }
+        Debug.Log($"[GameManager] Player finished race: {winnerObj.name}");
     }
     
     public int GetPlayerRank(NetworkObject playerObject)
