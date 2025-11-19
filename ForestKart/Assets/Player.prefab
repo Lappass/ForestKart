@@ -966,6 +966,7 @@ GameObject:
   - component: {fileID: 8678362721937909448}
   - component: {fileID: 2878455962770544421}
   - component: {fileID: 1082661002892278524}
+  - component: {fileID: 3795762509149656223}
   m_Layer: 2
   m_Name: 4x4_Player
   m_TagString: Untagged
@@ -1117,6 +1118,21 @@ MonoBehaviour:
   reverse: 0
   taillight: {fileID: 3808312120602600597}
   drift: {x: 0, y: 0}
+  controlsEnabled: 0
+--- !u!114 &3795762509149656223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2808542796244286539}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9fd0952c565675a46a987335d52ef0c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
+  splinePath: {fileID: 0}
 --- !u!1 &3206082810977452450
 GameObject:
   m_ObjectHideFlags: 0

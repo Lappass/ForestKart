@@ -66,8 +66,12 @@ public class AIKartController : NetworkBehaviour
     private Vector3 targetPosition;
     private Vector3 targetDirection;
     
+    private int lapCount = 0;
+    private float lastSplinePosition = 0f;
+    
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<float> networkSpeed = new NetworkVariable<float>(0f);
+    private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
     
     private bool isOvertaking = false;
     private float overtakingTimer = 0f;
@@ -90,7 +94,9 @@ public class AIKartController : NetworkBehaviour
         if (splinePath != null)
         {
             splineLength = splinePath.Spline.GetLength();
-            currentSplinePosition = UnityEngine.Random.Range(0f, 1f);
+            currentSplinePosition = 0f;
+            lastSplinePosition = 0f;
+            lapCount = 0;
             
             randomSpeedOffset = UnityEngine.Random.Range(-speedVariation, speedVariation);
             randomLateralOffset = UnityEngine.Random.Range(-lateralRandomness, lateralRandomness);
@@ -289,6 +295,13 @@ public class AIKartController : NetworkBehaviour
         {
             ApplyObstacleAvoidance();
         }
+        
+        if (lastSplinePosition > 0.9f && currentSplinePosition < 0.1f)
+        {
+            lapCount++;
+            networkLapCount.Value = lapCount;
+        }
+        lastSplinePosition = currentSplinePosition;
         
         networkSplinePosition.Value = currentSplinePosition;
         networkSpeed.Value = currentSpeed;
@@ -664,6 +677,30 @@ public class AIKartController : NetworkBehaviour
     public void RecalculateSpeed()
     {
         CalculateSpeedParameters();
+    }
+    
+    public float GetTotalProgress()
+    {
+        if (IsServer)
+        {
+            return lapCount + currentSplinePosition;
+        }
+        else
+        {
+            return networkLapCount.Value + networkSplinePosition.Value;
+        }
+    }
+    
+    public float GetSplinePosition()
+    {
+        if (IsServer)
+        {
+            return currentSplinePosition;
+        }
+        else
+        {
+            return networkSplinePosition.Value;
+        }
     }
     
     void OnDrawGizmosSelected()

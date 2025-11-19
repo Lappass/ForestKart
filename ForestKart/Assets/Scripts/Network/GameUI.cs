@@ -9,6 +9,9 @@ public class GameUI : MonoBehaviour
     public TextMeshProUGUI countdownText;
     public GameObject countdownPanel;
     
+    [Header("Ranking UI")]
+    public TextMeshProUGUI rankingText;
+    
     private GameManager gameManager;
     
     void Start()
@@ -28,6 +31,11 @@ public class GameUI : MonoBehaviour
         if (countdownText != null)
         {
             countdownText.text = "";
+        }
+        
+        if (rankingText != null)
+        {
+            rankingText.text = "";
         }
     }
     
@@ -54,6 +62,11 @@ public class GameUI : MonoBehaviour
                 {
                     countdownText.text = countdownInt.ToString();
                 }
+                
+                if (rankingText != null)
+                {
+                    rankingText.text = "";
+                }
             }
             else
             {
@@ -66,8 +79,30 @@ public class GameUI : MonoBehaviour
                 {
                     countdownText.text = "";
                 }
+                
+                UpdateRankingDisplay();
             }
         }
+        else
+        {
+            if (rankingText != null)
+            {
+                rankingText.text = "";
+            }
+        }
+    }
+    
+    private void UpdateRankingDisplay()
+    {
+        if (gameManager == null || rankingText == null) return;
+        
+        Unity.Netcode.NetworkObject localPlayerObject = Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayerObject == null) return;
+        
+        int rank = gameManager.GetPlayerRank(localPlayerObject);
+        int totalVehicles = gameManager.GetTotalVehicleCount();
+        
+        rankingText.text = $"{rank}/{totalVehicles}";
     }
     
     private void OnStartRaceClicked()
