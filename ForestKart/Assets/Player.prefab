@@ -1122,8 +1122,24 @@ MonoBehaviour:
   controlsEnabled: 0
   centerOfMassOffset: {x: 0, y: -0.5, z: 0}
   maxSpeed: 50
+  enableSplineSpeedPenalty: 1
+  splineLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  detectionDistance: 5
+  showDebugInfo: 0
+  offSplineSpeedMultiplier: 0.2
+  speedPenaltySmoothing: 2
   drivingCamera: {fileID: 1830331603005655102}
   finishLineCamera: {fileID: 8440466623752152321}
+  enableVibration: 1
+  showVibrationDebug: 1
+  engineVibrationIntensity: 1
+  brakeVibrationIntensity: 1
+  collisionVibrationIntensity: 1
+  collisionVibrationDuration: 0.3
+  driftVibrationIntensity: 1
+  speedVibrationMultiplier: 1
 --- !u!114 &3795762509149656223
 MonoBehaviour:
   m_ObjectHideFlags: 0

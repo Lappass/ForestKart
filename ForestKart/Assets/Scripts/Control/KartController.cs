@@ -36,9 +36,34 @@ public class KartController : NetworkBehaviour
     [Header("Speed Limit")]
     public float maxSpeed = 0f;
     
+    [Header("Spline Speed Penalty")]
+    [Tooltip("Enable speed penalty when not on spline")]
+    public bool enableSplineSpeedPenalty = true;
+    
+    [Tooltip("Layer mask for detecting spline. If set to Nothing, no speed penalty will be applied")]
+    public LayerMask splineLayer = 1 << 0; // Default layer
+    
+    [Tooltip("Detection distance (downward raycast distance)")]
+    public float detectionDistance = 5f;
+    
+    [Tooltip("Show debug info in Console")]
+    public bool showDebugInfo = false;
+    
+    [Tooltip("Speed multiplier when not on spline (0-1, lower is slower)")]
+    [Range(0.1f, 1f)]
+    public float offSplineSpeedMultiplier = 0.7f;
+    
+    [Tooltip("Speed penalty smoothing")]
+    [Range(0.1f, 10f)]
+    public float speedPenaltySmoothing = 2f;
+    
     [Header("Camera Settings")]
     public CinemachineCamera drivingCamera;
     public CinemachineCamera finishLineCamera;
+    
+    private float currentSpeedMultiplier = 1f;
+    private float originalDriveTorque;
+    private float originalMaxSpeed;
     
     void Start()
     {
@@ -51,6 +76,9 @@ public class KartController : NetworkBehaviour
         {
             maxSpeed = 50f;
         }
+        
+        originalDriveTorque = DriveTorque;
+        originalMaxSpeed = maxSpeed;
         
         if (taillight != null)
         {
@@ -168,8 +196,13 @@ public class KartController : NetworkBehaviour
         
         if (!controlsEnabled) return;
         
+        if (enableSplineSpeedPenalty)
+        {
+            UpdateSplineSpeedPenalty();
+        }
+        
         Drive(gas, brake,steer,drift);
-        AddDownForce(); 
+        AddDownForce();
     }
     
     public void EnableControls()
@@ -289,12 +322,15 @@ public class KartController : NetworkBehaviour
     }
     private void Drive(float acceleration, float brake,Vector2 steer, Vector2 drift)
     {
-        if (maxSpeed > 0f && (IsServer || IsOwner))
+        float effectiveMaxSpeed = maxSpeed * currentSpeedMultiplier;
+        float effectiveDriveTorque = DriveTorque * currentSpeedMultiplier;
+        
+        if (effectiveMaxSpeed > 0f && (IsServer || IsOwner))
         {
             Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
             float horizontalSpeed = horizontalVelocity.magnitude;
             
-            if (horizontalSpeed >= maxSpeed * 0.95f)
+            if (horizontalSpeed >= effectiveMaxSpeed * 0.95f)
             {
                 if (acceleration > 0f)
                 {
@@ -302,9 +338,9 @@ public class KartController : NetworkBehaviour
                 }
             }
             
-            if (horizontalSpeed > maxSpeed)
+            if (horizontalSpeed > effectiveMaxSpeed)
             {
-                Vector3 limitedVelocity = horizontalVelocity.normalized * maxSpeed;
+                Vector3 limitedVelocity = horizontalVelocity.normalized * effectiveMaxSpeed;
                 limitedVelocity.y = rb.linearVelocity.y;
                 rb.linearVelocity = limitedVelocity;
             }
@@ -312,11 +348,11 @@ public class KartController : NetworkBehaviour
         
         if (!reverse)
         {
-            forwardTorque = acceleration * DriveTorque;
+            forwardTorque = acceleration * effectiveDriveTorque;
         }
         else if (reverse)
         {
-            forwardTorque = -acceleration * DriveTorque;
+            forwardTorque = -acceleration * effectiveDriveTorque;
         }
             brake *= BrakeTorque;
         steer.x = steer.x * SteerAngle;
@@ -406,14 +442,15 @@ public class KartController : NetworkBehaviour
                 rb.linearVelocity = velocity;
             }
             
-            if (maxSpeed > 0f)
+            float effectiveMaxSpeed = maxSpeed * currentSpeedMultiplier;
+            if (effectiveMaxSpeed > 0f)
             {
                 Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
                 float horizontalSpeed = horizontalVelocity.magnitude;
                 
-                if (horizontalSpeed > maxSpeed)
+                if (horizontalSpeed > effectiveMaxSpeed)
                 {
-                    Vector3 limitedVelocity = horizontalVelocity.normalized * maxSpeed;
+                    Vector3 limitedVelocity = horizontalVelocity.normalized * effectiveMaxSpeed;
                     limitedVelocity.y = rb.linearVelocity.y;
                     rb.linearVelocity = limitedVelocity;
                 }
@@ -442,4 +479,79 @@ public class KartController : NetworkBehaviour
         yield return new WaitForSeconds(0.1f);
         rb.constraints = RigidbodyConstraints.None;
     }
+    
+    private bool CheckIfOnSpline()
+    {
+        // Raycast downward to detect if on spline layer
+        RaycastHit hit;
+        Vector3 rayOrigin = transform.position;
+        Vector3 rayDirection = Vector3.down;
+        
+        // Check from kart center
+        if (Physics.Raycast(rayOrigin, rayDirection, out hit, detectionDistance, splineLayer))
+        {
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"[KartController] Detected spline layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+            }
+            return true;
+        }
+        
+        // Check from wheel positions (more accurate)
+        if (driveWheels != null && driveWheels.Length > 0)
+        {
+            int wheelsOnSpline = 0;
+            foreach (var wheel in driveWheels)
+            {
+                if (wheel != null)
+                {
+                    Vector3 wheelPos = wheel.transform.position;
+                    if (Physics.Raycast(wheelPos, Vector3.down, out hit, detectionDistance, splineLayer))
+                    {
+                        wheelsOnSpline++;
+                    }
+                }
+            }
+            
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"[KartController] Wheel detection: {wheelsOnSpline}/{driveWheels.Length} on spline");
+            }
+            
+            // If at least half of the wheels are on spline, consider on spline
+            return wheelsOnSpline >= driveWheels.Length / 2;
+        }
+        
+        if (showDebugInfo && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"[KartController] No spline layer detected, current layer mask: {splineLayer.value}");
+        }
+        
+        return false;
+    }
+    
+    private void UpdateSplineSpeedPenalty()
+    {
+        // If splineLayer is not set, default to no speed penalty
+        if (splineLayer.value == 0)
+        {
+            currentSpeedMultiplier = 1f;
+            if (showDebugInfo && Time.frameCount % 60 == 0)
+            {
+                Debug.LogWarning("[KartController] splineLayer not set, defaulting to no speed penalty! Please set splineLayer in Inspector.");
+            }
+            return;
+        }
+        
+        bool isOnSpline = CheckIfOnSpline();
+        float targetMultiplier = isOnSpline ? 1f : offSplineSpeedMultiplier;
+        
+        currentSpeedMultiplier = Mathf.Lerp(currentSpeedMultiplier, targetMultiplier, Time.deltaTime * speedPenaltySmoothing);
+        
+        if (showDebugInfo && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"[KartController] isOnSpline: {isOnSpline}, currentSpeedMultiplier: {currentSpeedMultiplier:F2}, targetMultiplier: {targetMultiplier:F2}");
+        }
+    }
+    
 }

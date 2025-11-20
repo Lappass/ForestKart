@@ -149,20 +149,28 @@ public class AIKartController : NetworkBehaviour
     {
         if (kartController == null) return;
         
-        float calculatedMaxSpeed = kartController.DriveTorque * 0.15f;
-        
-        if (maxSpeed <= 0f)
+        // Prefer using KartController's maxSpeed to ensure AI and players use the same speed limit
+        if (kartController.maxSpeed > 0f)
         {
-            maxSpeed = calculatedMaxSpeed * speedMultiplier;
-        }
-        
-        if (maxSpeed <= 0f)
-        {
-            maxSpeed = 50f;
+            maxSpeed = kartController.maxSpeed * speedMultiplier;
         }
         else
         {
-            maxSpeed = Mathf.Max(maxSpeed, 50f);
+            float calculatedMaxSpeed = kartController.DriveTorque * 0.15f;
+            
+            if (maxSpeed <= 0f)
+            {
+                maxSpeed = calculatedMaxSpeed * speedMultiplier;
+            }
+            
+            if (maxSpeed <= 0f)
+            {
+                maxSpeed = 50f;
+            }
+            else
+            {
+                maxSpeed = Mathf.Max(maxSpeed, 50f);
+            }
         }
         
         if (targetSpeed <= 0f)
