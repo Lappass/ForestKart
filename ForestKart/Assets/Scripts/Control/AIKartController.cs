@@ -156,12 +156,20 @@ public class AIKartController : NetworkBehaviour
             maxSpeed = calculatedMaxSpeed * speedMultiplier;
         }
         
+        if (maxSpeed <= 0f)
+        {
+            maxSpeed = 50f;
+        }
+        else
+        {
+            maxSpeed = Mathf.Max(maxSpeed, 50f);
+        }
+        
         if (targetSpeed <= 0f)
         {
             targetSpeed = maxSpeed * 0.9f;
         }
         
-        maxSpeed = Mathf.Clamp(maxSpeed, 10f, 50f);
         targetSpeed = Mathf.Clamp(targetSpeed, minSpeed, maxSpeed);
     }
     

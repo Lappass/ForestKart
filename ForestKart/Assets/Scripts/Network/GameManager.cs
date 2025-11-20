@@ -132,11 +132,44 @@ public class GameManager : NetworkBehaviour
             }
             
             GameObject player = Instantiate(playerPrefab, spawnPos, spawnRot);
+            
+            player.transform.position = spawnPos;
+            player.transform.rotation = spawnRot;
+            
+            Rigidbody playerRb = player.GetComponentInChildren<Rigidbody>();
+            if (playerRb != null)
+            {
+                playerRb.position = spawnPos;
+                playerRb.rotation = spawnRot;
+                playerRb.linearVelocity = Vector3.zero;
+                playerRb.angularVelocity = Vector3.zero;
+            }
+            
             NetworkObject playerNetObj = player.GetComponent<NetworkObject>();
             if (playerNetObj != null)
             {
+                player.transform.position = spawnPos;
+                player.transform.rotation = spawnRot;
+                if (playerRb != null)
+                {
+                    playerRb.position = spawnPos;
+                    playerRb.rotation = spawnRot;
+                    playerRb.linearVelocity = Vector3.zero;
+                    playerRb.angularVelocity = Vector3.zero;
+                }
+                
                 playerNetObj.SpawnAsPlayerObject(clientId);
                 playerNetObj.ChangeOwnership(clientId);
+                
+                player.transform.position = spawnPos;
+                player.transform.rotation = spawnRot;
+                if (playerRb != null)
+                {
+                    playerRb.position = spawnPos;
+                    playerRb.rotation = spawnRot;
+                    playerRb.linearVelocity = Vector3.zero;
+                    playerRb.angularVelocity = Vector3.zero;
+                }
             }
             
             KartController kart = player.GetComponentInChildren<KartController>();

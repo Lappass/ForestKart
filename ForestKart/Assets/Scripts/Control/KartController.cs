@@ -33,6 +33,9 @@ public class KartController : NetworkBehaviour
     [Header("Stability")]
     public Vector3 centerOfMassOffset = new Vector3(0f, -0.5f, 0f);
     
+    [Header("Speed Limit")]
+    public float maxSpeed = 0f;
+    
     [Header("Camera Settings")]
     public CinemachineCamera drivingCamera;
     public CinemachineCamera finishLineCamera;
@@ -43,6 +46,11 @@ public class KartController : NetworkBehaviour
         rb.centerOfMass += centerOfMassOffset;
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.maxAngularVelocity = 7f;
+        
+        if (maxSpeed <= 0f)
+        {
+            maxSpeed = 50f;
+        }
         
         if (taillight != null)
         {
@@ -72,7 +80,29 @@ public class KartController : NetworkBehaviour
         
         if (IsOwner)
         {
+            StartCoroutine(WaitForPositionSync());
             StartCoroutine(SetupPlayerInputDelayed());
+        }
+    }
+    
+    private System.Collections.IEnumerator WaitForPositionSync()
+    {
+        yield return null;
+        yield return null;
+        
+        Vector3 currentPos = transform.position;
+        Vector3 prefabDefaultPos = new Vector3(22.42f, 0f, 21.33f);
+        
+        if (Vector3.Distance(currentPos, prefabDefaultPos) < 1f)
+        {
+            float waitTime = 0f;
+            float maxWaitTime = 1f;
+            
+            while (waitTime < maxWaitTime && Vector3.Distance(transform.position, prefabDefaultPos) < 1f)
+            {
+                yield return null;
+                waitTime += Time.deltaTime;
+            }
         }
     }
     
@@ -259,6 +289,27 @@ public class KartController : NetworkBehaviour
     }
     private void Drive(float acceleration, float brake,Vector2 steer, Vector2 drift)
     {
+        if (maxSpeed > 0f && (IsServer || IsOwner))
+        {
+            Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+            float horizontalSpeed = horizontalVelocity.magnitude;
+            
+            if (horizontalSpeed >= maxSpeed * 0.95f)
+            {
+                if (acceleration > 0f)
+                {
+                    acceleration = 0f;
+                }
+            }
+            
+            if (horizontalSpeed > maxSpeed)
+            {
+                Vector3 limitedVelocity = horizontalVelocity.normalized * maxSpeed;
+                limitedVelocity.y = rb.linearVelocity.y;
+                rb.linearVelocity = limitedVelocity;
+            }
+        }
+        
         if (!reverse)
         {
             forwardTorque = acceleration * DriveTorque;
@@ -353,6 +404,19 @@ public class KartController : NetworkBehaviour
                 Vector3 velocity = rb.linearVelocity;
                 velocity.y = Mathf.Clamp(velocity.y, -10f, 8f);
                 rb.linearVelocity = velocity;
+            }
+            
+            if (maxSpeed > 0f)
+            {
+                Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+                float horizontalSpeed = horizontalVelocity.magnitude;
+                
+                if (horizontalSpeed > maxSpeed)
+                {
+                    Vector3 limitedVelocity = horizontalVelocity.normalized * maxSpeed;
+                    limitedVelocity.y = rb.linearVelocity.y;
+                    rb.linearVelocity = limitedVelocity;
+                }
             }
         }
         

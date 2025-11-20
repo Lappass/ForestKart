@@ -1121,6 +1121,7 @@ MonoBehaviour:
   drift: {x: 0, y: 0}
   controlsEnabled: 0
   centerOfMassOffset: {x: 0, y: -0.5, z: 0}
+  maxSpeed: 50
   drivingCamera: {fileID: 1830331603005655102}
   finishLineCamera: {fileID: 8440466623752152321}
 --- !u!114 &3795762509149656223
