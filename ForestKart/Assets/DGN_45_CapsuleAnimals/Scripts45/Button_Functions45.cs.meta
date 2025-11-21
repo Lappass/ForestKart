@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 7ef3212bb7ff25f41869948d87a2546a
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307088
+  packageName: 'Ultimate Capsule Humanoid Animals: Complete 45-Character Bundle+
+    Matcap Magic'
+  packageVersion: 1.0
+  assetPath: Assets/DGN_45_CapsuleAnimals/Scripts45/Button_Functions45.cs
+  uploadId: 757366

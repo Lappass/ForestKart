@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: e812b8a8e019b3840b7f02b0d91726d2
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307088
+  packageName: 'Ultimate Capsule Humanoid Animals: Complete 45-Character Bundle+
+    Matcap Magic'
+  packageVersion: 1.0
+  assetPath: Assets/DGN_45_CapsuleAnimals/DGN_15_CapsuleAnimals _V2/Sahders/DOGANINDS-GradientSkybox.shader
+  uploadId: 757366

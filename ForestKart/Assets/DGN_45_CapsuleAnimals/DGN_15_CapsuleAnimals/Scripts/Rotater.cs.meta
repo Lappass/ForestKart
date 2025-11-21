@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 6b141e7101a5d0e43adda1b91117d070
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307088
+  packageName: 'Ultimate Capsule Humanoid Animals: Complete 45-Character Bundle+
+    Matcap Magic'
+  packageVersion: 1.0
+  assetPath: Assets/DGN_45_CapsuleAnimals/DGN_15_CapsuleAnimals/Scripts/Rotater.cs
+  uploadId: 757366
