@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1981365622588148892}
   - component: {fileID: 1898069360287708451}
   - component: {fileID: 4130272253739280993}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: MagsRearRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -97,7 +97,7 @@ GameObject:
   - component: {fileID: 195641579137682007}
   - component: {fileID: 7510697154966182913}
   - component: {fileID: 6607306273371630047}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_BackTire
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -181,7 +181,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3156192290773692774}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: WheelColliders
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -216,7 +216,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 596204640469024830}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_Body
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -253,7 +253,7 @@ GameObject:
   - component: {fileID: 2866344971225227892}
   - component: {fileID: 2686559078065105871}
   - component: {fileID: 4728082617408930962}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: MagsRearLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -338,7 +338,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2603843309486246354}
   - component: {fileID: 6465260628707292256}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: engine-reverse
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -466,7 +466,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2565990195311994097}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: ArcadeEngineAudio
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -503,7 +503,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8224306008825841183}
   - component: {fileID: 7193190145341418705}
-  m_Layer: 13
+  m_Layer: 7
   m_Name: KartBouncingCapsule
   m_TagString: Player
   m_Icon: {fileID: 0}
@@ -560,7 +560,7 @@ GameObject:
   - component: {fileID: 4543290768464840959}
   - component: {fileID: 6933031994955556101}
   - component: {fileID: 897182356957687960}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: WheelFrontLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -669,7 +669,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3020613358161872721}
   - component: {fileID: 7236449374392587612}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: engine_start
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -798,7 +798,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3412039458983745520}
   - component: {fileID: 7720849021637997392}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: Drift
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -926,7 +926,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3676958837413557911}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: KartBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -968,7 +968,7 @@ GameObject:
   - component: {fileID: 1082661002892278524}
   - component: {fileID: 3795762509149656223}
   - component: {fileID: 988418962322781963}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: 4x4_Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -988,6 +988,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 8151520491000895079}
   - {fileID: 8224306008825841183}
   - {fileID: 3156192290773692774}
   - {fileID: 2565990195311994097}
@@ -1132,14 +1133,6 @@ MonoBehaviour:
   speedPenaltySmoothing: 2
   drivingCamera: {fileID: 1830331603005655102}
   finishLineCamera: {fileID: 8440466623752152321}
-  enableVibration: 1
-  showVibrationDebug: 1
-  engineVibrationIntensity: 1
-  brakeVibrationIntensity: 1
-  collisionVibrationIntensity: 1
-  collisionVibrationDuration: 0.3
-  driftVibrationIntensity: 1
-  speedVibrationMultiplier: 1
 --- !u!114 &3795762509149656223
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1181,7 +1174,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4486037805968749512}
   - component: {fileID: 1101031428052383515}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: engine-idle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1311,7 +1304,7 @@ GameObject:
   - component: {fileID: 3098538643992944271}
   - component: {fileID: 2637744590467489584}
   - component: {fileID: 7020247339183601158}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_Taillights
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1398,7 +1391,7 @@ GameObject:
   - component: {fileID: 7297027410226273406}
   - component: {fileID: 9122968389931379807}
   - component: {fileID: 469643041745931737}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: WheelRearLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1506,7 +1499,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 819935990784626333}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_BackTire
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1540,7 +1533,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7885718930448367469}
   - component: {fileID: 2906909232052576743}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: RearRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1613,7 +1606,7 @@ GameObject:
   - component: {fileID: 1745562933315097789}
   - component: {fileID: 7186826856299474847}
   - component: {fileID: 1512360415461324246}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: WheelFrontRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1723,7 +1716,7 @@ GameObject:
   - component: {fileID: 3086560266076960481}
   - component: {fileID: 291535814950391323}
   - component: {fileID: 8534187158989064979}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_BackTireMags
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1808,7 +1801,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9108249590966362453}
   - component: {fileID: 6966060704682343326}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: FrontLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1880,7 +1873,7 @@ GameObject:
   - component: {fileID: 8536309747796338685}
   - component: {fileID: 1408201280952895933}
   - component: {fileID: 7910732544972727837}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1966,7 +1959,7 @@ GameObject:
   - component: {fileID: 6389066205345140634}
   - component: {fileID: 128772111188563256}
   - component: {fileID: 348999877317991061}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_Window
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2050,7 +2043,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1412102272684592733}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: 4x4_Tires
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2086,7 +2079,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2406530050282815725}
   - component: {fileID: 4839994552274237516}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: FrontRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2158,7 +2151,7 @@ GameObject:
   - component: {fileID: 1178743272740494375}
   - component: {fileID: 2875863697288579420}
   - component: {fileID: 486020193037872725}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2248,7 +2241,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4833975533996124265}
   - component: {fileID: 359692612440726229}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: engine-running
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2378,7 +2371,7 @@ GameObject:
   - component: {fileID: 659069621859708976}
   - component: {fileID: 7945512155941594008}
   - component: {fileID: 5699153312859205404}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_LicensePlate
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2464,7 +2457,7 @@ GameObject:
   - component: {fileID: 8425833669590442768}
   - component: {fileID: 3601470239459926267}
   - component: {fileID: 8381264159422359713}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_ExhaustPipe
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2550,7 +2543,7 @@ GameObject:
   - component: {fileID: 3970574062993370208}
   - component: {fileID: 8658668484515050423}
   - component: {fileID: 764737313857008598}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_Headlights
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2637,7 +2630,7 @@ GameObject:
   - component: {fileID: 2635941684976674485}
   - component: {fileID: 957318989564692583}
   - component: {fileID: 315108390182169369}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: WheelRearRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2746,7 +2739,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2923844628406774708}
   - component: {fileID: 8823491995306233496}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: RearLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2818,7 +2811,7 @@ GameObject:
   - component: {fileID: 8652002094101679425}
   - component: {fileID: 1579605251857519979}
   - component: {fileID: 7675595722291043952}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: MagsFrontRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2905,7 +2898,7 @@ GameObject:
   - component: {fileID: 8440466623752152321}
   - component: {fileID: 4610099568070438104}
   - component: {fileID: 6862231680953375760}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: WinCam
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3029,7 +3022,7 @@ GameObject:
   - component: {fileID: 7127320199692032507}
   - component: {fileID: 3529930644084467699}
   - component: {fileID: 4770780612503616972}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: 4x4_FogLights
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3115,7 +3108,7 @@ GameObject:
   - component: {fileID: 4785859074636992669}
   - component: {fileID: 1188330078654076604}
   - component: {fileID: 190202385123262846}
-  m_Layer: 2
+  m_Layer: 7
   m_Name: MagsFrontLeft
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3202,7 +3195,7 @@ GameObject:
   - component: {fileID: 1830331603005655102}
   - component: {fileID: 8398247223938076926}
   - component: {fileID: 1932197348049400604}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: CinemachineCamera Follow Car
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3315,3 +3308,209 @@ MonoBehaviour:
     Time: 0.065
     Smoothing: 1.82
     IgnoreY: 1
+--- !u!1001 &8560821541987885894
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 7208964289862294045}
+    m_Modifications:
+    - target: {fileID: 63605213759405553, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 110957315053204601, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 358384508751631169, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 473723939706332833, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.528
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.35300064
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 652517598492881531, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 911400357625491355, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Name
+      value: DGN_Pig_NoOutline Variant
+      objectReference: {fileID: 0}
+    - target: {fileID: 911400357625491355, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1264887979437190100, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1362991789524665571, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1562746004474589205, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1779568320271380623, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2102282622587137031, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2371686339555781106, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2703269614023872389, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2731491788470770611, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 2761495620543569270, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 3416449032305037056, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 4649981964579382153, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5483081707579116380, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5724514565849441783, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5737281915439471967, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5989361488966990718, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6030175697624475115, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6057432182017185548, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6098051630644592792, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6201010201946115555, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6504724323854594433, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6633219037623482636, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6954081303393650764, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 7560606576658075066, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 8143998605410993358, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 8320883591022515028, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Layer
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 9102065362991655780, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+--- !u!4 &8151520491000895079 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 571430931116471585, guid: 27e633399886f3b44a1c4751a31c3dc2, type: 3}
+  m_PrefabInstance: {fileID: 8560821541987885894}
+  m_PrefabAsset: {fileID: 0}

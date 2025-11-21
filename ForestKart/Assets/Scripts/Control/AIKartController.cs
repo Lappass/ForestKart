@@ -83,6 +83,10 @@ public class AIKartController : NetworkBehaviour
     private float speedChangeTimer = 0f;
     private float lateralChangeTimer = 0f;
     
+    // Obstacle avoidance state
+    private float baseTargetSpeed = 0f;
+    private bool isAvoidingObstacle = false;
+    
     void Start()
     {
         kartController = GetComponent<KartController>();
@@ -179,6 +183,7 @@ public class AIKartController : NetworkBehaviour
         }
         
         targetSpeed = Mathf.Clamp(targetSpeed, minSpeed, maxSpeed);
+        baseTargetSpeed = targetSpeed; // Store base speed for obstacle avoidance
     }
     
     void Update()
@@ -559,10 +564,11 @@ public class AIKartController : NetworkBehaviour
     {
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
+        Vector3 up = Vector3.up;
         
         RaycastHit hit;
         bool obstacleAhead = Physics.Raycast(
-            transform.position + Vector3.up * 0.5f,
+            transform.position + up * 0.5f,
             forward,
             out hit,
             detectionDistance,
@@ -571,38 +577,114 @@ public class AIKartController : NetworkBehaviour
         
         if (obstacleAhead)
         {
-            Vector3 leftDir = (forward - right * 0.5f).normalized;
-            Vector3 rightDir = (forward + right * 0.5f).normalized;
+            isAvoidingObstacle = true;
             
+            // Calculate distance to obstacle for dynamic response
+            float distanceToObstacle = hit.distance;
+            float avoidanceStrength = Mathf.Clamp01(1f - (distanceToObstacle / detectionDistance));
+            
+            // Use avoidanceAngle parameter to calculate directions
+            float angleRad = avoidanceAngle * Mathf.Deg2Rad;
+            Vector3 leftDir = (forward * Mathf.Cos(angleRad) - right * Mathf.Sin(angleRad)).normalized;
+            Vector3 rightDir = (forward * Mathf.Cos(angleRad) + right * Mathf.Sin(angleRad)).normalized;
+            
+            // Check left and right directions
+            RaycastHit leftHit, rightHit;
             bool leftClear = !Physics.Raycast(
-                transform.position + Vector3.up * 0.5f,
+                transform.position + up * 0.5f,
                 leftDir,
-                detectionDistance * 0.7f,
+                out leftHit,
+                detectionDistance * 0.8f,
                 obstacleLayer
             );
             
             bool rightClear = !Physics.Raycast(
-                transform.position + Vector3.up * 0.5f,
+                transform.position + up * 0.5f,
                 rightDir,
-                detectionDistance * 0.7f,
+                out rightHit,
+                detectionDistance * 0.8f,
                 obstacleLayer
             );
             
+            // Check side directions for better awareness
+            Vector3 leftSide = -right;
+            Vector3 rightSide = right;
+            RaycastHit leftSideHit, rightSideHit;
+            bool leftSideClear = !Physics.Raycast(
+                transform.position + up * 0.5f,
+                leftSide,
+                out leftSideHit,
+                detectionDistance * 0.5f,
+                obstacleLayer
+            );
+            
+            bool rightSideClear = !Physics.Raycast(
+                transform.position + up * 0.5f,
+                rightSide,
+                out rightSideHit,
+                detectionDistance * 0.5f,
+                obstacleLayer
+            );
+            
+            // Decision making with priority
             if (leftClear && rightClear)
             {
-                targetDirection = Vector3.Slerp(forward, rightDir, 0.3f);
+                // Both clear, prefer right (or check which is closer to spline path)
+                float rightStrength = Mathf.Lerp(0.2f, 0.5f, avoidanceStrength);
+                targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
+            }
+            else if (leftClear && leftSideClear)
+            {
+                // Left is clear, turn left
+                float leftStrength = Mathf.Lerp(0.3f, 0.6f, avoidanceStrength);
+                targetDirection = Vector3.Slerp(targetDirection, leftDir, leftStrength);
+            }
+            else if (rightClear && rightSideClear)
+            {
+                // Right is clear, turn right
+                float rightStrength = Mathf.Lerp(0.3f, 0.6f, avoidanceStrength);
+                targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
             }
             else if (leftClear)
             {
-                targetDirection = Vector3.Slerp(forward, leftDir, 0.4f);
+                // Left clear but side blocked, gentle turn
+                float leftStrength = Mathf.Lerp(0.2f, 0.4f, avoidanceStrength);
+                targetDirection = Vector3.Slerp(targetDirection, leftDir, leftStrength);
             }
             else if (rightClear)
             {
-                targetDirection = Vector3.Slerp(forward, rightDir, 0.4f);
+                // Right clear but side blocked, gentle turn
+                float rightStrength = Mathf.Lerp(0.2f, 0.4f, avoidanceStrength);
+                targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
             }
             else
             {
-                targetSpeed *= 0.5f;
+                // All blocked, slow down smoothly
+                float targetSlowSpeed = baseTargetSpeed * Mathf.Lerp(0.3f, 0.6f, distanceToObstacle / detectionDistance);
+                targetSpeed = Mathf.Lerp(targetSpeed, targetSlowSpeed, Time.deltaTime * speedSmoothing * 2f);
+                targetSpeed = Mathf.Max(targetSpeed, minSpeed);
+            }
+            
+            // Reduce speed based on distance to obstacle
+            if (distanceToObstacle < detectionDistance * 0.5f)
+            {
+                float speedReduction = Mathf.Lerp(0.5f, 0.8f, distanceToObstacle / (detectionDistance * 0.5f));
+                float desiredSpeed = baseTargetSpeed * speedReduction;
+                targetSpeed = Mathf.Lerp(targetSpeed, desiredSpeed, Time.deltaTime * speedSmoothing * 3f);
+                targetSpeed = Mathf.Max(targetSpeed, minSpeed);
+            }
+        }
+        else
+        {
+            // No obstacle ahead, restore speed smoothly
+            if (isAvoidingObstacle)
+            {
+                targetSpeed = Mathf.Lerp(targetSpeed, baseTargetSpeed, Time.deltaTime * speedSmoothing);
+                if (Mathf.Abs(targetSpeed - baseTargetSpeed) < 0.1f)
+                {
+                    targetSpeed = baseTargetSpeed;
+                    isAvoidingObstacle = false;
+                }
             }
         }
     }
@@ -688,6 +770,7 @@ public class AIKartController : NetworkBehaviour
     public void SetTargetSpeed(float speed)
     {
         targetSpeed = Mathf.Clamp(speed, minSpeed, maxSpeed);
+        baseTargetSpeed = targetSpeed; // Update base speed when externally set
     }
     
     public void RecalculateSpeed()
