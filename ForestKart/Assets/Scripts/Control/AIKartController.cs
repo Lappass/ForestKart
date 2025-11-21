@@ -243,11 +243,11 @@ public class AIKartController : NetworkBehaviour
             if (Mathf.Abs(positionChange) > 0.05f)
             {
                 bestT = currentSplinePosition + Mathf.Sign(positionChange) * 0.05f;
+            }
+            
+            currentSplinePosition = bestT;
         }
         
-        currentSplinePosition = bestT;
-    }
-    
         currentSplinePosition = Mathf.Repeat(currentSplinePosition, 1f);
         
         float lookAheadT = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;

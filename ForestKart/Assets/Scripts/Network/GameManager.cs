@@ -61,8 +61,6 @@ public class GameManager : NetworkBehaviour
             showLeaderboard.Value = false;
             finishedPlayers.Clear();
         }
-        
-        showLeaderboard.OnValueChanged += OnShowLeaderboardChanged;
     }
     
     [ServerRpc(RequireOwnership = false)]
@@ -445,7 +443,14 @@ public class GameManager : NetworkBehaviour
         
         if (foundNewFinisher)
         {
-            ShowLeaderboardClientRpc();
+            // Show leaderboard only to the players who finished
+            foreach (var client in NetworkManager.Singleton.ConnectedClients)
+            {
+                if (client.Value.PlayerObject != null && finishedPlayers.Contains(client.Value.PlayerObject))
+                {
+                    ShowLeaderboardToClientClientRpc(new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { client.Key } } });
+                }
+            }
             
             int totalVehicles = GetTotalVehicleCount();
             if (finishedPlayers.Count >= totalVehicles)
@@ -660,26 +665,37 @@ public class GameManager : NetworkBehaviour
     }
     
     [ClientRpc]
-    private void ShowLeaderboardClientRpc()
+    private void ShowLeaderboardToClientClientRpc(ClientRpcParams rpcParams = default)
     {
-        showLeaderboard.Value = true;
-    }
-    
-    private void OnShowLeaderboardChanged(bool oldValue, bool newValue)
-    {
-        if (newValue)
+        // Show leaderboard directly to this client only
+        LeaderboardUI leaderboardUI = FindFirstObjectByType<LeaderboardUI>();
+        if (leaderboardUI != null)
         {
-            LeaderboardUI leaderboardUI = FindFirstObjectByType<LeaderboardUI>();
-            if (leaderboardUI != null)
-            {
-                leaderboardUI.ShowLeaderboard();
-            }
+            leaderboardUI.ShowLeaderboard();
         }
     }
     
     public bool ShouldShowLeaderboard()
     {
-        return showLeaderboard.Value;
+        // Only show leaderboard if the local player has finished
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsClient) return false;
+        
+        if (NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
+        {
+            PlayerProgressTracker tracker = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerProgressTracker>();
+            if (tracker == null)
+            {
+                tracker = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponentInChildren<PlayerProgressTracker>();
+            }
+            
+            if (tracker != null)
+            {
+                // Check if local player has finished
+                return tracker.GetLapCount() >= totalLaps;
+            }
+        }
+        
+        return false;
     }
     
 }
