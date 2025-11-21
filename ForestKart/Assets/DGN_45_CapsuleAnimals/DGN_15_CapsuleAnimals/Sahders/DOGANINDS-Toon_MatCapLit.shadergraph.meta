@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2d3c7ae49c28d7940b4179d13f383daf
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307088
+  packageName: 'Ultimate Capsule Humanoid Animals: Complete 45-Character Bundle+
+    Matcap Magic'
+  packageVersion: 1.0
+  assetPath: Assets/DGN_45_CapsuleAnimals/DGN_15_CapsuleAnimals/Sahders/DOGANINDS-Toon_MatCapLit.shadergraph
+  uploadId: 757366
