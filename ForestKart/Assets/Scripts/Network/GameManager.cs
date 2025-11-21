@@ -270,16 +270,14 @@ public class GameManager : NetworkBehaviour
     [ClientRpc]
     private void ActivatePlayerInputsClientRpc()
     {
-        foreach (var client in NetworkManager.Singleton.ConnectedClients)
+        NetworkObject localPlayerObject = NetworkManager.Singleton.LocalClient?.PlayerObject;
+        if (localPlayerObject != null)
         {
-            if (client.Value.PlayerObject != null)
+            UnityEngine.InputSystem.PlayerInput playerInput = localPlayerObject.GetComponent<UnityEngine.InputSystem.PlayerInput>();
+            if (playerInput != null)
             {
-                UnityEngine.InputSystem.PlayerInput playerInput = client.Value.PlayerObject.GetComponent<UnityEngine.InputSystem.PlayerInput>();
-                if (playerInput != null)
-                {
-                    playerInput.enabled = true;
-                    playerInput.ActivateInput();
-                }
+                playerInput.enabled = true;
+                playerInput.ActivateInput();
             }
         }
     }

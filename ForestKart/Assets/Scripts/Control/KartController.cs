@@ -164,6 +164,14 @@ public class KartController : NetworkBehaviour
             StartCoroutine(WaitForPositionSync());
             StartCoroutine(SetupPlayerInputDelayed());
         }
+        else
+        {
+            UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+            if (playerInput != null)
+            {
+                playerInput.enabled = false;
+            }
+        }
     }
     
     private System.Collections.IEnumerator WaitForPositionSync()
@@ -421,24 +429,14 @@ public class KartController : NetworkBehaviour
             {
                 if (i >= 2 && i < rearWheelInitialLocalRotations.Length)
                 {
-                    // Rear wheels: Manual control
-                    // 1. Calculate rolling angle based on RPM
-                    // RPM * 360 / 60 = RPM * 6 = degrees per second
                     float rpm = driveWheels[i].rpm;
                     float deltaAngle = rpm * 6f * Time.deltaTime; 
                     rearWheelRollingAngles[i] = (rearWheelRollingAngles[i] + deltaAngle) % 360f;
-                    
-                    // 2. Calculate base rotation (Car Body Rotation * Initial Relative Rotation)
-                    // This keeps the wheel aligned with the car body
                     Quaternion baseRotation = transform.rotation * rearWheelInitialLocalRotations[i];
-                    
-                    // 3. Apply rolling around the LOCAL Z axis (as seen in screenshot)
-                    // Rotate around the local Z axis by the rolling angle
                     driveWheelMeshes[i].transform.rotation = baseRotation * Quaternion.AngleAxis(rearWheelRollingAngles[i], Vector3.forward);
                 }
                 else if (i < wheelMeshInitialRotations.Length)
                 {
-                    // Front wheels: Standard WheelCollider following
                     driveWheelMeshes[i].transform.rotation = wheelrotation * wheelMeshInitialRotations[i];
                 }
                 else
@@ -448,7 +446,6 @@ public class KartController : NetworkBehaviour
             }
             else
             {
-                // Fallback to direct rotation if not initialized
                 driveWheelMeshes[i].transform.rotation = wheelrotation;
             }
         }
