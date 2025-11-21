@@ -15,6 +15,10 @@ public class KartController : NetworkBehaviour
     private Rigidbody rb;
     public WheelCollider[] driveWheels;
     public GameObject[] driveWheelMeshes;
+    private Quaternion[] wheelMeshInitialRotations;
+    private Quaternion[] rearWheelInitialLocalRotations; // Store initial rotation relative to car body for rear wheels
+    private float[] rearWheelRollingAngles; // Accumulate rolling angle for rear wheels
+    private bool wheelRotationsInitialized = false;
     public float DriveTorque = 100;
     public float BrakeTorque = 500;
     private float forwardTorque;
@@ -79,6 +83,55 @@ public class KartController : NetworkBehaviour
         
         originalDriveTorque = DriveTorque;
         originalMaxSpeed = maxSpeed;
+        
+        // Initialize wheel mesh rotation offsets
+        if (driveWheels != null && driveWheelMeshes != null)
+        {
+            if (driveWheels.Length != driveWheelMeshes.Length)
+            {
+                Debug.LogWarning($"[KartController] Wheel count mismatch! driveWheels: {driveWheels.Length}, driveWheelMeshes: {driveWheelMeshes.Length}");
+            }
+            
+            wheelMeshInitialRotations = new Quaternion[driveWheelMeshes.Length];
+            rearWheelInitialLocalRotations = new Quaternion[driveWheelMeshes.Length];
+            rearWheelRollingAngles = new float[driveWheelMeshes.Length];
+
+            for (int i = 0; i < driveWheelMeshes.Length; i++)
+            {
+                if (i < driveWheels.Length && driveWheels[i] != null && driveWheelMeshes[i] != null)
+                {
+                    // Get initial world rotation of wheel collider
+                    Vector3 wheelPos;
+                    Quaternion wheelRot;
+                    driveWheels[i].GetWorldPose(out wheelPos, out wheelRot);
+                    
+                    if (i >= 2)
+                    {
+                        // Rear wheels: store rotation relative to CAR BODY
+                        // This ensures rear wheels always follow car body + rolling, ignoring any weird WheelCollider rotation
+                        rearWheelInitialLocalRotations[i] = Quaternion.Inverse(transform.rotation) * driveWheelMeshes[i].transform.rotation;
+                        rearWheelRollingAngles[i] = 0f;
+                        Debug.Log($"[KartController] Initialized rear wheel {i} relative to body.");
+                    }
+                    else
+                    {
+                        // Front wheels: calculate the rotation offset
+                        // offset = meshRot * Inverse(wheelRot)
+                        wheelMeshInitialRotations[i] = driveWheelMeshes[i].transform.rotation * Quaternion.Inverse(wheelRot);
+                        Debug.Log($"[KartController] Initialized front wheel {i} rotation offset. Wheel: {driveWheels[i].name}, Mesh: {driveWheelMeshes[i].name}");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"[KartController] Wheel {i} or its mesh is null! Skipping rotation offset initialization.");
+                }
+            }
+            wheelRotationsInitialized = true;
+        }
+        else
+        {
+            Debug.LogWarning("[KartController] driveWheels or driveWheelMeshes is null! Cannot initialize wheel rotation offsets.");
+        }
         
         if (taillight != null)
         {
@@ -362,7 +415,42 @@ public class KartController : NetworkBehaviour
             Quaternion wheelrotation;
             driveWheels[i].GetWorldPose(out wheelposition, out wheelrotation);
             driveWheelMeshes[i].transform.position = wheelposition;
-            driveWheelMeshes[i].transform.rotation = wheelrotation;
+            
+            // Apply rotation
+            if (wheelRotationsInitialized)
+            {
+                if (i >= 2 && i < rearWheelInitialLocalRotations.Length)
+                {
+                    // Rear wheels: Manual control
+                    // 1. Calculate rolling angle based on RPM
+                    // RPM * 360 / 60 = RPM * 6 = degrees per second
+                    float rpm = driveWheels[i].rpm;
+                    float deltaAngle = rpm * 6f * Time.deltaTime; 
+                    rearWheelRollingAngles[i] = (rearWheelRollingAngles[i] + deltaAngle) % 360f;
+                    
+                    // 2. Calculate base rotation (Car Body Rotation * Initial Relative Rotation)
+                    // This keeps the wheel aligned with the car body
+                    Quaternion baseRotation = transform.rotation * rearWheelInitialLocalRotations[i];
+                    
+                    // 3. Apply rolling around the LOCAL Z axis (as seen in screenshot)
+                    // Rotate around the local Z axis by the rolling angle
+                    driveWheelMeshes[i].transform.rotation = baseRotation * Quaternion.AngleAxis(rearWheelRollingAngles[i], Vector3.forward);
+                }
+                else if (i < wheelMeshInitialRotations.Length)
+                {
+                    // Front wheels: Standard WheelCollider following
+                    driveWheelMeshes[i].transform.rotation = wheelrotation * wheelMeshInitialRotations[i];
+                }
+                else
+                {
+                    driveWheelMeshes[i].transform.rotation = wheelrotation;
+                }
+            }
+            else
+            {
+                // Fallback to direct rotation if not initialized
+                driveWheelMeshes[i].transform.rotation = wheelrotation;
+            }
         }
         for(int i = 0; i < driveWheels.Length; i++)
         {

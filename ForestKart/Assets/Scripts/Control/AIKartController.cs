@@ -148,7 +148,7 @@ public class AIKartController : NetworkBehaviour
         
         splinePath = closestSpline;
     }
-    
+
     private void CalculateSpeedParameters()
     {
         if (kartController == null) return;
@@ -243,11 +243,11 @@ public class AIKartController : NetworkBehaviour
             if (Mathf.Abs(positionChange) > 0.05f)
             {
                 bestT = currentSplinePosition + Mathf.Sign(positionChange) * 0.05f;
-            }
-            
-            currentSplinePosition = bestT;
         }
         
+        currentSplinePosition = bestT;
+    }
+    
         currentSplinePosition = Mathf.Repeat(currentSplinePosition, 1f);
         
         float lookAheadT = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
@@ -277,7 +277,7 @@ public class AIKartController : NetworkBehaviour
             CheckAndExecuteOvertaking();
         }
         
-        if (isOvertaking)
+            if (isOvertaking)
         {
             UpdateOvertaking();
         }
@@ -383,9 +383,9 @@ public class AIKartController : NetworkBehaviour
                 otherRb = otherRoot.GetComponentInChildren<Rigidbody>();
             }
             
-            if (otherRb != null)
-            {
-                float otherSpeed = otherRb.linearVelocity.magnitude;
+                if (otherRb != null)
+                {
+                    float otherSpeed = otherRb.linearVelocity.magnitude;
                 float speedDifference = currentSpeed - otherSpeed;
                 
                 bool shouldOvertake = false;
@@ -741,7 +741,7 @@ public class AIKartController : NetworkBehaviour
             else
             {
                 kartController.gas = 0.6f;
-                kartController.brake = 0f;
+            kartController.brake = 0f;
             }
         }
         
