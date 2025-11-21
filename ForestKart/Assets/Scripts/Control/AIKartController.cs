@@ -200,53 +200,38 @@ public class AIKartController : NetworkBehaviour
     {
         currentSpeed = rb.linearVelocity.magnitude;
         
+        // Improved tracking logic: Estimate next position and refine locally
         float distanceTraveled = currentSpeed * Time.deltaTime;
         float normalizedDistance = distanceTraveled / splineLength;
-        currentSplinePosition = (currentSplinePosition + normalizedDistance) % 1f;
-        Vector3 currentSplinePos = splinePath.transform.TransformPoint(
-            SplineUtility.EvaluatePosition(splinePath.Spline, currentSplinePosition)
-        );
-        float distanceToSpline = Vector3.Distance(transform.position, currentSplinePos);
-        Vector3 toTarget = currentSplinePos - transform.position;
-        float forwardDot = Vector3.Dot(toTarget, transform.forward);
-        float reachThreshold = Mathf.Max(2f, currentSpeed * 0.2f);
-        if (distanceToSpline < reachThreshold || forwardDot < 0) {
- 
-            currentSplinePosition = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
-        }
+        float predictedPos = (currentSplinePosition + normalizedDistance) % 1f;
         
-        if (distanceToSpline > 5f)
+        // Search window parameters
+        float searchDist = Mathf.Max(10f, currentSpeed * Time.deltaTime * 2f); // Dynamic search window
+        float searchRange = searchDist / splineLength;
+        int searchSteps = 10;
+        
+        float bestT = predictedPos;
+        float bestDistSq = float.MaxValue;
+        
+        // Local search to snap to spline
+        for (int i = -searchSteps; i <= searchSteps; i++)
         {
-            float searchRange = 0.1f;
-            float minT = Mathf.Max(0f, currentSplinePosition - searchRange);
-            float maxT = Mathf.Min(1f, currentSplinePosition + searchRange);
+            float t = predictedPos + ((float)i / searchSteps) * searchRange;
+            float evalT = Mathf.Repeat(t, 1f);
             
-            float bestT = currentSplinePosition;
-            float bestDistance = distanceToSpline;
+            Vector3 testPos = splinePath.transform.TransformPoint(
+                SplineUtility.EvaluatePosition(splinePath.Spline, evalT)
+            );
             
-            for (int i = 0; i <= 20; i++)
+            float dSq = (testPos - transform.position).sqrMagnitude;
+            if (dSq < bestDistSq)
             {
-                float testT = Mathf.Lerp(minT, maxT, i / 20f);
-                Vector3 testPos = splinePath.transform.TransformPoint(
-                    SplineUtility.EvaluatePosition(splinePath.Spline, testT)
-                );
-                float testDist = Vector3.Distance(transform.position, testPos);
-                
-                if (testDist < bestDistance)
-                {
-                    bestDistance = testDist;
-                    bestT = testT;
-                }
+                bestDistSq = dSq;
+                bestT = evalT;
             }
-            
-            float positionChange = bestT - currentSplinePosition;
-            if (Mathf.Abs(positionChange) > 0.05f)
-            {
-                bestT = currentSplinePosition + Mathf.Sign(positionChange) * 0.05f;
         }
         
         currentSplinePosition = bestT;
-    }
     
         currentSplinePosition = Mathf.Repeat(currentSplinePosition, 1f);
         
@@ -257,20 +242,6 @@ public class AIKartController : NetworkBehaviour
         Vector3 splineRight = Vector3.Cross(splineTangent, splineUp).normalized;
         Vector3 splineNormal = splineRight;
         
-        float targetWidth = 5f; 
-        Vector3 currentSplinePosForWidth = splinePath.transform.TransformPoint(
-            SplineUtility.EvaluatePosition(splinePath.Spline, currentSplinePosition)
-        );
-        Vector3 splineTangentForWidth = splinePath.transform.TransformDirection(
-            SplineUtility.EvaluateTangent(splinePath.Spline, currentSplinePosition)
-        );
-        Vector3 toKart = transform.position - currentSplinePosForWidth;
-        float lateralDist = Vector3.Dot(toKart, Vector3.Cross(splineTangentForWidth, Vector3.up).normalized);
-        bool inTargetLine = Mathf.Abs(lateralDist) < targetWidth * 0.5f;
-        float forwardDotForWidth = Vector3.Dot(splineTangentForWidth, transform.forward);
-        if (inTargetLine && forwardDotForWidth > 0.2f) {
-            currentSplinePosition = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
-        }
         
         if (enableOvertaking)
         {
@@ -694,7 +665,10 @@ public class AIKartController : NetworkBehaviour
         if (kartController == null) return;
         
         Vector3 localTarget = transform.InverseTransformDirection(targetDirection);
-        float steerAngle = Mathf.Clamp(localTarget.x * steerSensitivity, -1f, 1f);
+        float forwardComponent = Mathf.Max(localTarget.z, 0.01f);
+        float signedAngle = Mathf.Atan2(localTarget.x, forwardComponent);
+        float normalizedAngle = signedAngle / (Mathf.PI * 0.5f);
+        float steerAngle = Mathf.Clamp(normalizedAngle * steerSensitivity, -1f, 1f);
         
         kartController.steer = new Vector2(steerAngle, 0);
         
