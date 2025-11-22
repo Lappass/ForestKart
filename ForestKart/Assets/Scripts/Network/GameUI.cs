@@ -238,4 +238,4 @@ public class GameUI : MonoBehaviour
         }
     }
 }
-
+//why not workling
