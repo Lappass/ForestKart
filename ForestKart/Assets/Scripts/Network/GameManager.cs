@@ -104,6 +104,11 @@ public class GameManager : NetworkBehaviour
             }
         }
         
+        if (CharacterSelectionUI.Instance != null)
+        {
+            CharacterSelectionUI.Instance.HideSelectionUI();
+        }
+        
         int spawnIndex = 0;
         
         foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)

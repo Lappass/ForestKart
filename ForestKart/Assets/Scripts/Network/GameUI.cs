@@ -16,14 +16,29 @@ public class GameUI : MonoBehaviour
     public TextMeshProUGUI lapText;
     
     private GameManager gameManager;
+    private CharacterSelectionUI characterSelectionUI;
+    
+    public static GameUI Instance { get; private set; }
+    
+    void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
     
     void Start()
     {
         gameManager = GameManager.Instance;
+        characterSelectionUI = CharacterSelectionUI.Instance;
         
         if (startRaceButton != null)
         {
             startRaceButton.onClick.AddListener(OnStartRaceClicked);
+            startRaceButton.gameObject.SetActive(false);
         }
         
         if (countdownPanel != null)
@@ -45,6 +60,24 @@ public class GameUI : MonoBehaviour
         {
             lapText.text = "";
         }
+        
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+        }
+    }
+    
+    
+    private void OnClientConnected(ulong clientId)
+    {
+        if (Unity.Netcode.NetworkManager.Singleton != null && 
+            Unity.Netcode.NetworkManager.Singleton.LocalClientId == clientId)
+        {
+            if (characterSelectionUI != null && !gameManager.IsGameStarted())
+            {
+                characterSelectionUI.ShowSelectionUI();
+            }
+        }
     }
     
     void Update()
@@ -54,8 +87,30 @@ public class GameUI : MonoBehaviour
             gameManager = GameManager.Instance;
         }
         
+        if (characterSelectionUI == null)
+        {
+            characterSelectionUI = CharacterSelectionUI.Instance;
+        }
+        
+        if (gameManager != null && !gameManager.IsGameStarted())
+        {
+            var networkManager = Unity.Netcode.NetworkManager.Singleton;
+            if (networkManager != null && networkManager.IsConnectedClient && characterSelectionUI != null)
+            {
+                bool allReady = characterSelectionUI.IsAllPlayersReady();
+                bool isHost = networkManager.IsServer;
+                UpdateStartButtonVisibility(isHost && allReady);
+            }
+            else
+            {
+                UpdateStartButtonVisibility(false);
+            }
+        }
+        
         if (gameManager != null && gameManager.IsGameStarted())
         {
+            UpdateStartButtonVisibility(false);
+            
             float countdown = gameManager.GetCountdownTime();
             
             if (countdown > 0f)
@@ -63,11 +118,6 @@ public class GameUI : MonoBehaviour
                 if (countdownPanel != null && !countdownPanel.activeSelf)
                 {
                     countdownPanel.SetActive(true);
-                }
-                
-                if (startRaceButton != null)
-                {
-                    startRaceButton.gameObject.SetActive(false);
                 }
                 
                 int countdownInt = Mathf.CeilToInt(countdown);
@@ -226,6 +276,11 @@ public class GameUI : MonoBehaviour
     {
         if (gameManager != null)
         {
+            if (characterSelectionUI != null)
+            {
+                characterSelectionUI.HideSelectionUI();
+            }
+            
             gameManager.StartRaceServerRpc();
         }
     }
@@ -235,6 +290,24 @@ public class GameUI : MonoBehaviour
         if (startRaceButton != null)
         {
             startRaceButton.gameObject.SetActive(show);
+        }
+    }
+    
+    public void UpdateStartButtonVisibility(bool show)
+    {
+        ShowStartButton(show);
+    }
+    
+    void OnDestroy()
+    {
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        }
+        
+        if (Instance == this)
+        {
+            Instance = null;
         }
     }
 }
