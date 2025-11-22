@@ -79,6 +79,7 @@ public class AIKartController : NetworkBehaviour
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<float> networkSpeed = new NetworkVariable<float>(0f);
     private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
+    private NetworkVariable<int> aiCharacterIndex = new NetworkVariable<int>(-1);
     
     private bool isOvertaking = false;
     private float overtakingTimer = 0f;
@@ -194,6 +195,80 @@ public class AIKartController : NetworkBehaviour
         baseTargetSpeed = targetSpeed; // Store base speed for obstacle avoidance
     }
     
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        
+        aiCharacterIndex.OnValueChanged += OnAICharacterIndexChanged;
+        
+        if (IsServer)
+        {
+            StartCoroutine(SpawnAICharacterDelayed());
+        }
+        else
+        {
+            // Late join handling
+            if (aiCharacterIndex.Value != -1)
+            {
+                SpawnAIModel(aiCharacterIndex.Value);
+            }
+        }
+    }
+    
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        aiCharacterIndex.OnValueChanged -= OnAICharacterIndexChanged;
+    }
+    
+    private void OnAICharacterIndexChanged(int oldVal, int newVal)
+    {
+        if (newVal != -1)
+        {
+            SpawnAIModel(newVal);
+        }
+    }
+    
+    private void SpawnAIModel(int index)
+    {
+        if (kartController != null && CharacterSelectionUI.Instance != null)
+        {
+            GameObject[] targetArray = CharacterSelectionUI.Instance.aiCharacterPrefabs;
+            
+            if (targetArray == null || targetArray.Length == 0)
+            {
+                targetArray = CharacterSelectionUI.Instance.characterPrefabs;
+            }
+            
+            if (targetArray != null && 
+                index >= 0 && 
+                index < targetArray.Length)
+            {
+                GameObject aiCharacter = targetArray[index];
+                if (aiCharacter != null)
+                {
+                    kartController.SpawnDriverModel(aiCharacter);
+                }
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator SpawnAICharacterDelayed()
+    {
+        yield return new WaitForSeconds(1.0f); // Wait for players to spawn and select
+        
+        if (kartController != null && CharacterSelectionUI.Instance != null)
+        {
+            int index = CharacterSelectionUI.Instance.GetRandomAvailableCharacterIndex();
+            if (index != -1)
+            {
+                aiCharacterIndex.Value = index;
+                SpawnAIModel(index); 
+                Debug.Log($"[AIKart] Server selected character index: {index}");
+            }
+        }
+    }
+
     private void ConfigureRearWheelFriction()
     {
         if (!adjustRearWheelFriction || kartController == null || kartController.driveWheels == null) return;
@@ -228,21 +303,15 @@ public class AIKartController : NetworkBehaviour
     private void UpdateAILogic()
     {
         currentSpeed = rb.linearVelocity.magnitude;
-        
-        // Improved tracking logic: Estimate next position and refine locally
         float distanceTraveled = currentSpeed * Time.deltaTime;
         float normalizedDistance = distanceTraveled / splineLength;
         float predictedPos = (currentSplinePosition + normalizedDistance) % 1f;
-        
-        // Search window parameters
-        float searchDist = Mathf.Max(10f, currentSpeed * Time.deltaTime * 2f); // Dynamic search window
+        float searchDist = Mathf.Max(10f, currentSpeed * Time.deltaTime * 2f);
         float searchRange = searchDist / splineLength;
         int searchSteps = 10;
         
         float bestT = predictedPos;
         float bestDistSq = float.MaxValue;
-        
-        // Local search to snap to spline
         for (int i = -searchSteps; i <= searchSteps; i++)
         {
             float t = predictedPos + ((float)i / searchSteps) * searchRange;
@@ -837,4 +906,4 @@ public class AIKartController : NetworkBehaviour
         }
     }
 }
-
+//why not workling

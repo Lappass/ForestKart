@@ -68,6 +68,11 @@ public class MinimalNetUI : MonoBehaviour
             Debug.Log("[MinimalNetUI] Controls group hidden");
         }
         
+        if (CharacterSelectionUI.Instance != null && GameManager.Instance != null && !GameManager.Instance.IsGameStarted())
+        {
+            CharacterSelectionUI.Instance.ShowSelectionUI();
+        }
+        
         if (Unity.Netcode.NetworkManager.Singleton.IsHost)
         {
             if (gameUI != null && startRaceButton != null)
@@ -84,3 +89,4 @@ public class MinimalNetUI : MonoBehaviour
         }
     }
 }
+//why not workling

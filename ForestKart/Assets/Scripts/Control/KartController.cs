@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.Rendering.Universal;
@@ -65,6 +66,19 @@ public class KartController : NetworkBehaviour
     public CinemachineCamera drivingCamera;
     public CinemachineCamera finishLineCamera;
     
+    [Header("Character Model")]
+    [Tooltip("Transform where the selected driver/character model should be instantiated. Driver model will be spawned here based on player selection.")]
+    public Transform driverModelParent;
+    
+    [Tooltip("Local position offset for the driver model (relative to driverModelParent)")]
+    public Vector3 driverModelPositionOffset = Vector3.zero;
+    
+    [Tooltip("Local rotation offset for the driver model (relative to driverModelParent)")]
+    public Vector3 driverModelRotationOffset = Vector3.zero;
+    
+    [Tooltip("Current driver/character model GameObject (spawned based on player selection)")]
+    private GameObject currentDriverModel;
+    
     private float currentSpeedMultiplier = 1f;
     private float originalDriveTorque;
     private float originalMaxSpeed;
@@ -107,16 +121,12 @@ public class KartController : NetworkBehaviour
                     
                     if (i >= 2)
                     {
-                        // Rear wheels: store rotation relative to CAR BODY
-                        // This ensures rear wheels always follow car body + rolling, ignoring any weird WheelCollider rotation
                         rearWheelInitialLocalRotations[i] = Quaternion.Inverse(transform.rotation) * driveWheelMeshes[i].transform.rotation;
                         rearWheelRollingAngles[i] = 0f;
                         Debug.Log($"[KartController] Initialized rear wheel {i} relative to body.");
                     }
                     else
                     {
-                        // Front wheels: calculate the rotation offset
-                        // offset = meshRot * Inverse(wheelRot)
                         wheelMeshInitialRotations[i] = driveWheelMeshes[i].transform.rotation * Quaternion.Inverse(wheelRot);
                         Debug.Log($"[KartController] Initialized front wheel {i} rotation offset. Wheel: {driveWheels[i].name}, Mesh: {driveWheelMeshes[i].name}");
                     }
@@ -159,6 +169,8 @@ public class KartController : NetworkBehaviour
             controlsEnabled = true;
         }
         
+        StartCoroutine(DelayedSpawnDriverModel());
+        
         if (IsOwner)
         {
             StartCoroutine(WaitForPositionSync());
@@ -171,6 +183,181 @@ public class KartController : NetworkBehaviour
             {
                 playerInput.enabled = false;
             }
+        }
+    }
+    
+    private System.Collections.IEnumerator DelayedSpawnDriverModel()
+    {
+        yield return new WaitForSeconds(0.5f);
+        
+        Debug.Log("[KartController] Attempting to spawn driver model...");
+        
+        ReplaceKartModel();
+    }
+    
+    private void ReplaceKartModel()
+    {
+        Debug.Log("[KartController] ReplaceKartModel called");
+        
+        if (CharacterSelectionUI.Instance == null)
+        {
+            Debug.LogWarning("[KartController] CharacterSelectionUI.Instance is null!");
+            return;
+        }
+        
+        if (NetworkManager.Singleton == null)
+        {
+            Debug.LogWarning("[KartController] NetworkManager.Singleton is null!");
+            return;
+        }
+        
+        Debug.Log("[KartController] CharacterSelectionUI and NetworkManager found");
+        
+        ulong clientId = 0;
+        NetworkObject playerNetObj = GetComponentInParent<NetworkObject>();
+        
+        if (playerNetObj != null && playerNetObj.IsSpawned)
+        {
+            clientId = playerNetObj.OwnerClientId;
+            Debug.Log($"[KartController] Got clientId from NetworkObject OwnerClientId: {clientId}");
+        }
+        
+        if (clientId == 0 && IsOwner && NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
+        {
+            clientId = NetworkManager.Singleton.LocalClientId;
+            Debug.Log($"[KartController] Got clientId from LocalClientId: {clientId}");
+        }
+        
+        if (clientId == 0 && playerNetObj != null && NetworkManager.Singleton != null)
+        {
+            foreach (var client in NetworkManager.Singleton.ConnectedClients)
+            {
+                if (client.Value.PlayerObject == playerNetObj)
+                {
+                    clientId = client.Key;
+                    Debug.Log($"[KartController] Got clientId from ConnectedClients: {clientId}");
+                    break;
+                }
+            }
+        }
+        
+        if (clientId == 0 && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            foreach (var client in NetworkManager.Singleton.ConnectedClients)
+            {
+                if (client.Value.PlayerObject != null && client.Value.PlayerObject == playerNetObj)
+                {
+                    clientId = client.Key;
+                    Debug.Log($"[KartController] Got clientId on server from ConnectedClients: {clientId}");
+                    break;
+                }
+            }
+        }
+        
+        if (clientId == 0)
+        {
+            Debug.LogWarning($"[KartController] Could not get clientId! IsOwner: {IsOwner}, IsServer: {NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer}, playerNetObj: {playerNetObj != null}");
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.ConnectedClientsIds.Count > 0)
+            {
+                clientId = NetworkManager.Singleton.ConnectedClientsIds[0];
+                Debug.Log($"[KartController] Using fallback clientId: {clientId}");
+            }
+            else
+            {
+                return;
+            }
+        }
+        
+        GameObject selectedCharacterPrefab = CharacterSelectionUI.Instance.GetPlayerCharacterPrefab(clientId);
+        if (selectedCharacterPrefab == null)
+        {
+            Debug.LogWarning($"[KartController] No character prefab selected for client {clientId}");
+            return;
+        }
+        
+        Debug.Log($"[KartController] Selected character prefab: {selectedCharacterPrefab.name} for client {clientId}");
+        
+        SpawnDriverModel(selectedCharacterPrefab, clientId);
+    }
+    
+    public void SpawnDriverModel(GameObject selectedCharacterPrefab, ulong clientId = 99999)
+    {
+        if (driverModelParent == null)
+        {
+            Debug.LogWarning("[KartController] driverModelParent is not set! Cannot spawn driver model.");
+            return;
+        }
+        
+        if (currentDriverModel != null)
+        {
+            Destroy(currentDriverModel);
+            currentDriverModel = null;
+        }
+        
+        GameObject driverModelFromPrefab = selectedCharacterPrefab;
+        
+        if (driverModelFromPrefab != null)
+        {
+            currentDriverModel = Instantiate(driverModelFromPrefab, driverModelParent);
+            
+            currentDriverModel.transform.localPosition = Vector3.zero;
+            currentDriverModel.transform.localRotation = Quaternion.identity;
+            currentDriverModel.transform.localScale = Vector3.one;
+            
+            currentDriverModel.transform.localPosition = driverModelPositionOffset;
+            currentDriverModel.transform.localRotation = Quaternion.Euler(driverModelRotationOffset);
+            
+            Debug.Log($"[KartController] Driver model spawned - Parent: {driverModelParent.name}, LocalPos: {currentDriverModel.transform.localPosition}, WorldPos: {currentDriverModel.transform.position}, ParentWorldPos: {driverModelParent.position}, ParentLocalPos: {driverModelParent.localPosition}, Offset: {driverModelPositionOffset}");
+            
+            NetworkObject driverNetObj = currentDriverModel.GetComponent<NetworkObject>();
+            if (driverNetObj != null) Destroy(driverNetObj);
+            
+            var netTransforms = currentDriverModel.GetComponentsInChildren<Unity.Netcode.Components.NetworkTransform>();
+            foreach (var nt in netTransforms) Destroy(nt);
+            
+            var clientNetTransforms = currentDriverModel.GetComponentsInChildren<Component>();
+            foreach (var comp in clientNetTransforms)
+            {
+                if (comp.GetType().Name.Contains("NetworkTransform"))
+                {
+                    Destroy(comp);
+                }
+            }
+
+            Animator animator = currentDriverModel.GetComponent<Animator>();
+            if (animator == null) animator = currentDriverModel.GetComponentInChildren<Animator>();
+            if (animator != null)
+            {
+                animator.applyRootMotion = false;
+                animator.enabled = false;
+            }
+            
+            currentDriverModel.transform.localPosition = driverModelPositionOffset;
+            currentDriverModel.transform.localRotation = Quaternion.Euler(driverModelRotationOffset);
+            
+            Rigidbody driverRb = currentDriverModel.GetComponent<Rigidbody>();
+            if (driverRb != null)
+            {
+                driverRb.isKinematic = true;
+                Destroy(driverRb); 
+            }
+            
+            KartController driverKartController = currentDriverModel.GetComponent<KartController>();
+            if (driverKartController == null)
+            {
+                driverKartController = currentDriverModel.GetComponentInChildren<KartController>();
+            }
+            if (driverKartController != null)
+            {
+                driverKartController.enabled = false;
+                Destroy(driverKartController);
+            }
+            
+            Debug.Log($"[KartController] Successfully spawned driver model '{driverModelFromPrefab.name}' for client {clientId} under {driverModelParent.name} at position {currentDriverModel.transform.localPosition}");
+        }
+        else
+        {
+            Debug.LogError($"[KartController] Could not find driver model in prefab '{selectedCharacterPrefab.name}'. Please check the prefab structure.");
         }
     }
     
@@ -640,3 +827,4 @@ public class KartController : NetworkBehaviour
     }
     
 }
+//why not workling
