@@ -27,6 +27,13 @@ public class AIKartController : NetworkBehaviour
     [Range(0.1f, 1f)]
     public float speedSmoothing = 0.5f;
     
+    [Header("Handling")]
+    public bool adjustRearWheelFriction = true;
+    [Range(1f, 2f)]
+    public float rearSidewaysFrictionMultiplier = 1.2f;
+    [Range(1f, 2f)]
+    public float rearForwardFrictionMultiplier = 1.1f;
+    
     [Header("Randomness")]
     public float speedVariation = 0.15f;
     
@@ -95,6 +102,7 @@ public class AIKartController : NetworkBehaviour
         
         FindSplinePath();
         CalculateSpeedParameters();
+        ConfigureRearWheelFriction();
         
         if (splinePath != null)
         {
@@ -261,6 +269,27 @@ public class AIKartController : NetworkBehaviour
         }
     }
 
+    private void ConfigureRearWheelFriction()
+    {
+        if (!adjustRearWheelFriction || kartController == null || kartController.driveWheels == null) return;
+        
+        for (int i = 0; i < kartController.driveWheels.Length; i++)
+        {
+            if (kartController.driveWheels[i] == null) continue;
+            if (i < 2) continue;
+            
+            WheelCollider wheel = kartController.driveWheels[i];
+            
+            WheelFrictionCurve sideways = wheel.sidewaysFriction;
+            sideways.stiffness *= rearSidewaysFrictionMultiplier;
+            wheel.sidewaysFriction = sideways;
+            
+            WheelFrictionCurve forward = wheel.forwardFriction;
+            forward.stiffness *= rearForwardFrictionMultiplier;
+            wheel.forwardFriction = forward;
+        }
+    }
+    
     void Update()
     {
         if (!IsServer) return;
@@ -303,11 +332,11 @@ public class AIKartController : NetworkBehaviour
             if (Mathf.Abs(positionChange) > 0.05f)
             {
                 bestT = currentSplinePosition + Mathf.Sign(positionChange) * 0.05f;
-            }
-            
-            currentSplinePosition = bestT;
         }
         
+        currentSplinePosition = bestT;
+        }
+    
         currentSplinePosition = Mathf.Repeat(currentSplinePosition, 1f);
         
         float lookAheadT = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
