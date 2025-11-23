@@ -85,9 +85,9 @@ public class CharacterSelectionUI : NetworkBehaviour
             characterSelectionPanel.SetActive(false);
         }
         
-        if (characterPrefabs != null && characterPrefabs.Length > 0)
+        if (characterDisplayParent != null)
         {
-            ShowCharacter(0);
+            characterDisplayParent.gameObject.SetActive(false);
         }
     }
     
@@ -167,6 +167,7 @@ public class CharacterSelectionUI : NetworkBehaviour
         }
     }
     
+    
     public void ShowSelectionUI()
     {
         if (characterSelectionPanel != null)
@@ -174,9 +175,20 @@ public class CharacterSelectionUI : NetworkBehaviour
             characterSelectionPanel.SetActive(true);
         }
         
+        bool isConnected = NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient;
+        
+        if (characterDisplayParent != null)
+        {
+            characterDisplayParent.gameObject.SetActive(isConnected);
+        }
+        
         isLocalPlayerReady = false;
         currentCharacterIndex = 0;
-        ShowCharacter(currentCharacterIndex);
+        
+        if (isConnected && characterPrefabs != null && characterPrefabs.Length > 0)
+        {
+            ShowCharacter(currentCharacterIndex);
+        }
         
         if (leftButton != null) leftButton.interactable = true;
         if (rightButton != null) rightButton.interactable = true;
@@ -247,6 +259,21 @@ public class CharacterSelectionUI : NetworkBehaviour
     {
         if (characterPrefabs == null || index < 0 || index >= characterPrefabs.Length) return;
         if (characterDisplayParent == null) return;
+        
+        bool isConnected = NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient;
+        if (!isConnected)
+        {
+            if (characterDisplayParent != null)
+            {
+                characterDisplayParent.gameObject.SetActive(false);
+            }
+            return;
+        }
+        
+        if (characterDisplayParent != null)
+        {
+            characterDisplayParent.gameObject.SetActive(true);
+        }
         
         if (currentDisplayCharacter != null)
         {
@@ -491,6 +518,27 @@ public class CharacterSelectionUI : NetworkBehaviour
             {
                 HideSelectionUI();
             }
+            else
+            {
+                bool isConnected = NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient;
+                if (isConnected && characterDisplayParent != null && !characterDisplayParent.gameObject.activeSelf)
+                {
+                    characterDisplayParent.gameObject.SetActive(true);
+                    if (characterPrefabs != null && characterPrefabs.Length > 0 && currentDisplayCharacter == null)
+                    {
+                        ShowCharacter(currentCharacterIndex);
+                    }
+                }
+                else if (!isConnected && characterDisplayParent != null && characterDisplayParent.gameObject.activeSelf)
+                {
+                    characterDisplayParent.gameObject.SetActive(false);
+                    if (currentDisplayCharacter != null)
+                    {
+                        Destroy(currentDisplayCharacter);
+                        currentDisplayCharacter = null;
+                    }
+                }
+            }
         }
         
         if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
@@ -517,4 +565,3 @@ public class CharacterSelectionUI : NetworkBehaviour
         }
     }
 }
-//why not workling

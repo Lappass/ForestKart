@@ -15,6 +15,7 @@ public class LeaderboardUI : MonoBehaviour
     public float updateInterval = 0.5f;
     
     private GameManager gameManager;
+    private PlayerAvatarRenderer avatarRenderer;
     private Dictionary<NetworkObject, GameObject> entryObjects = new Dictionary<NetworkObject, GameObject>();
     private bool isShowing = false;
     private float updateTimer = 0f;
@@ -22,6 +23,20 @@ public class LeaderboardUI : MonoBehaviour
     void Start()
     {
         gameManager = GameManager.Instance;
+        avatarRenderer = PlayerAvatarRenderer.Instance;
+        
+        if (avatarRenderer == null)
+        {
+            if (gameManager != null)
+            {
+                avatarRenderer = gameManager.gameObject.AddComponent<PlayerAvatarRenderer>();
+            }
+            else
+            {
+                GameObject avatarRendererObj = new GameObject("PlayerAvatarRenderer");
+                avatarRenderer = avatarRendererObj.AddComponent<PlayerAvatarRenderer>();
+            }
+        }
         
         if (leaderboardPanel != null)
         {
@@ -150,23 +165,95 @@ public class LeaderboardUI : MonoBehaviour
     
     private void UpdateLeaderboardEntry(Transform entryTransform, LeaderboardEntry entry, int rank)
     {
-        TextMeshProUGUI rankText = entryTransform.Find("RankText")?.GetComponent<TextMeshProUGUI>();
+        RawImage avatarImage = entryTransform.Find("AvatarImage")?.GetComponent<RawImage>();
         TextMeshProUGUI nameText = entryTransform.Find("NameText")?.GetComponent<TextMeshProUGUI>();
-        TextMeshProUGUI progressText = entryTransform.Find("ProgressText")?.GetComponent<TextMeshProUGUI>();
-        TextMeshProUGUI statusText = entryTransform.Find("StatusText")?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI rankText = entryTransform.Find("RankText")?.GetComponent<TextMeshProUGUI>();
         
-        if (rankText == null)
+        if (avatarImage == null)
         {
-            TextMeshProUGUI[] texts = entryTransform.GetComponentsInChildren<TextMeshProUGUI>();
-            if (texts.Length >= 1) rankText = texts[0];
-            if (texts.Length >= 2) nameText = texts[1];
-            if (texts.Length >= 3) progressText = texts[2];
-            if (texts.Length >= 4) statusText = texts[3];
+            avatarImage = entryTransform.GetComponentInChildren<RawImage>();
         }
         
-        if (rankText != null)
+        if (nameText == null || rankText == null)
         {
-            rankText.text = rank.ToString();
+            TextMeshProUGUI[] texts = entryTransform.GetComponentsInChildren<TextMeshProUGUI>();
+            
+            if (texts.Length == 1)
+            {
+                if (nameText == null)
+                {
+                    nameText = texts[0];
+                }
+            }
+            else if (texts.Length >= 2)
+            {
+                if (nameText == null && rankText == null)
+                {
+                    TextMeshProUGUI rightmostText = texts[0];
+                    float rightmostX = texts[0].rectTransform.anchoredPosition.x;
+                    
+                    for (int i = 1; i < texts.Length; i++)
+                    {
+                        float x = texts[i].rectTransform.anchoredPosition.x;
+                        if (x > rightmostX)
+                        {
+                            rightmostX = x;
+                            rightmostText = texts[i];
+                        }
+                    }
+                    
+                    rankText = rightmostText;
+                    
+                    TextMeshProUGUI leftmostText = null;
+                    float leftmostX = float.MaxValue;
+                    
+                    for (int i = 0; i < texts.Length; i++)
+                    {
+                        if (texts[i] != rightmostText)
+                        {
+                            float x = texts[i].rectTransform.anchoredPosition.x;
+                            if (x < leftmostX)
+                            {
+                                leftmostX = x;
+                                leftmostText = texts[i];
+                            }
+                        }
+                    }
+                    
+                    nameText = leftmostText;
+                }
+                else if (nameText == null)
+                {
+                    foreach (var text in texts)
+                    {
+                        if (text != rankText)
+                        {
+                            nameText = text;
+                            break;
+                        }
+                    }
+                }
+                else if (rankText == null)
+                {
+                    foreach (var text in texts)
+                    {
+                        if (text != nameText)
+                        {
+                            rankText = text;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (avatarImage != null && avatarRenderer != null && entry.networkObject != null)
+        {
+            RenderTexture avatarRenderTexture = avatarRenderer.GetPlayerAvatar(entry.networkObject, addToUpdateList: true);
+            if (avatarRenderTexture != null)
+            {
+                avatarImage.texture = avatarRenderTexture;
+            }
         }
         
         if (nameText != null)
@@ -174,47 +261,16 @@ public class LeaderboardUI : MonoBehaviour
             nameText.text = entry.playerName;
         }
         
-        if (progressText != null)
+        if (rankText != null)
         {
-            if (entry.isFinished)
-            {
-                progressText.text = "Finished";
-                if (progressText.color != Color.green)
-                {
-                    progressText.color = Color.green;
-                }
-            }
-            else
-            {
-                int currentLap = entry.lapCount;
-                int totalLaps = gameManager != null ? gameManager.totalLaps : 3;
-                float progressPercent = (entry.progress / totalLaps) * 100f;
-                progressText.text = $"{currentLap}/{totalLaps} ({progressPercent:F0}%)";
-                
-                if (progressText.color != Color.white)
-                {
-                    progressText.color = Color.white;
-                }
-            }
+            rankText.text = rank.ToString();
         }
-        
-        if (statusText != null)
+        else
         {
-            if (entry.isFinished)
+            TextMeshProUGUI[] allTexts = entryTransform.GetComponentsInChildren<TextMeshProUGUI>();
+            if (allTexts.Length > 0)
             {
-                statusText.text = "✓";
-                if (statusText.color != Color.green)
-                {
-                    statusText.color = Color.green;
-                }
-            }
-            else
-            {
-                statusText.text = "...";
-                if (statusText.color != Color.yellow)
-                {
-                    statusText.color = Color.yellow;
-                }
+                allTexts[allTexts.Length - 1].text = rank.ToString();
             }
         }
     }
