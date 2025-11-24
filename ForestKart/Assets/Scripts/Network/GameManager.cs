@@ -5,12 +5,29 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Splines;
 using Unity.Cinemachine;
+using UnityEngine.UI;
 
 public class GameManager : NetworkBehaviour
 {
     [Header("Prefabs")]
     public GameObject playerPrefab;
     public GameObject aiKartPrefab;
+    
+    [Header("Intro Sequence")]
+    public GameObject introBannerUI;
+    public Camera mainCamera;
+    public Camera introCamera1;
+    public Camera introCamera2;
+    public float intro1Duration = 1f;
+    public float intro2Duration = 1f;
+    [Tooltip("Camera 1 movement direction (normalized). Default: negative Y axis (down)")]
+    public Vector3 camera1MoveDirection = new Vector3(0f, -1f, 0f);
+    [Tooltip("Camera 1 total movement distance")]
+    public float camera1MoveDistance = 20f;
+    [Tooltip("Camera 2 arc height (Y offset for the arc midpoint). Positive = upward arc")]
+    public float camera2ArcHeight = 5f;
+    [Tooltip("Camera 2 arc forward distance (how far forward the arc goes)")]
+    public float camera2ArcForwardDistance = 10f;
     
     [Header("Spawn Settings")]
     public SplineContainer raceTrack;
@@ -31,6 +48,7 @@ public class GameManager : NetworkBehaviour
     
     private NetworkVariable<bool> gameStarted = new NetworkVariable<bool>(false);
     private NetworkVariable<bool> gameFinished = new NetworkVariable<bool>(false);
+    private NetworkVariable<bool> isPlayingIntro = new NetworkVariable<bool>(false);
     private NetworkVariable<float> countdownTime = new NetworkVariable<float>(0f);
     private NetworkVariable<bool> showLeaderboard = new NetworkVariable<bool>(false);
     
@@ -59,6 +77,7 @@ public class GameManager : NetworkBehaviour
         {
             gameStarted.Value = false;
             gameFinished.Value = false;
+            isPlayingIntro.Value = false;
             countdownTime.Value = 0f;
             showLeaderboard.Value = false;
             finishedPlayers.Clear();
@@ -88,6 +107,8 @@ public class GameManager : NetworkBehaviour
         }
         
         gameStarted.Value = true;
+        isPlayingIntro.Value = true;
+        PlayIntroSequenceClientRpc();
         
         bool useSpawnPoints = spawnPoints != null && spawnPoints.Length > 0;
         
@@ -246,10 +267,220 @@ public class GameManager : NetworkBehaviour
             spawnIndex++;
             yield return new WaitForSeconds(0.2f);
         }
+        float startTime = Time.time;   
+        float elapsedTime = Time.time - startTime;
+        float totalIntroTime = intro1Duration + intro2Duration;
         
-        yield return new WaitForSeconds(1f);
-        
+        if (elapsedTime < totalIntroTime)
+        {
+            yield return new WaitForSeconds(totalIntroTime - elapsedTime);
+        }
+        isPlayingIntro.Value = false;
+        ActivatePlayerCamerasClientRpc();
         StartCountdownServerRpc();
+    }
+    
+    [ClientRpc]
+    private void ActivatePlayerCamerasClientRpc()
+    {
+        if (mainCamera != null)
+        {
+             Debug.Log($"[GameManager] Main Camera verified: {mainCamera.name}");
+        }
+        KartController localKart = GetLocalPlayerKart();
+        if (localKart != null && localKart.drivingCamera != null)
+        {
+            localKart.drivingCamera.gameObject.SetActive(false);
+            localKart.drivingCamera.enabled = false;
+            localKart.drivingCamera.gameObject.SetActive(true);
+            localKart.drivingCamera.enabled = true;
+            Debug.Log($"[GameManager] Activated local player driving camera: {localKart.drivingCamera.name}");
+        }
+        else
+        {
+            Debug.LogWarning("[GameManager] Could not find local player kart or driving camera in ActivatePlayerCamerasClientRpc!");
+        }
+    }
+    
+    [ClientRpc]
+    private void PlayIntroSequenceClientRpc()
+    {
+        Debug.Log($"[GameManager] PlayIntroSequenceClientRpc called on client. introCamera1: {introCamera1}, introCamera2: {introCamera2}");
+        if (introCamera1 == null)
+        {
+            Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            foreach (Camera cam in allCameras)
+            {
+                if (cam.name.Contains("IntroCamera1") || cam.name.Contains("Intro Camera 1") || cam.name.Contains("Camera1"))
+                {
+                    introCamera1 = cam;
+                    Debug.Log($"[GameManager] Found introCamera1 by name: {cam.name}");
+                    break;
+                }
+            }
+        }
+        
+        if (introCamera2 == null)
+        {
+            Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            foreach (Camera cam in allCameras)
+            {
+                if (cam.name.Contains("IntroCamera2") || cam.name.Contains("Intro Camera 2") || cam.name.Contains("Camera2"))
+                {
+                    introCamera2 = cam;
+                    Debug.Log($"[GameManager] Found introCamera2 by name: {cam.name}");
+                    break;
+                }
+            }
+        }
+        
+        StartCoroutine(IntroSequenceCoroutine());
+    }
+    
+    private IEnumerator IntroSequenceCoroutine()
+    {
+        Debug.Log("[GameManager] IntroSequenceCoroutine started on client");
+        
+        // 1. Show Banner
+        if (introBannerUI != null) introBannerUI.SetActive(true);
+        else Debug.LogWarning("[GameManager] introBannerUI is null!");
+        KartController localKart = null;
+        float waitTime = 0f;
+        float maxWaitTime = 5f;
+        while (localKart == null && waitTime < maxWaitTime)
+        {
+            localKart = GetLocalPlayerKart();
+            if (localKart == null)
+            {
+                yield return new WaitForSeconds(0.1f);
+                waitTime += 0.1f;
+            }
+        }
+        
+        if (localKart != null && localKart.drivingCamera != null)
+        {
+            localKart.drivingCamera.gameObject.SetActive(false);
+        }
+        else
+        {
+            KartController[] allKarts = FindObjectsByType<KartController>(FindObjectsSortMode.None);
+            foreach (KartController kart in allKarts)
+            {
+                if (kart.drivingCamera != null && kart.drivingCamera.gameObject.activeInHierarchy)
+                {
+                    NetworkObject kartNetObj = kart.GetComponentInParent<NetworkObject>();
+                    if (kartNetObj != null && kartNetObj.IsOwner)
+                    {
+                        kart.drivingCamera.gameObject.SetActive(false);
+                    }
+                }
+            }
+        }
+        if (mainCamera == null)
+        {
+            mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                GameObject mainCamObj = GameObject.FindGameObjectWithTag("MainCamera");
+                if (mainCamObj != null)
+                {
+                    mainCamera = mainCamObj.GetComponent<Camera>();
+                }
+            }
+        }
+        if (introCamera1 == null)
+        {
+            yield break;
+        }
+        
+        if (introCamera2 == null)
+        {
+            yield break;
+        }
+        if (introCamera1 != null)
+        {
+            introCamera1.gameObject.SetActive(true);
+            introCamera1.depth = 100; 
+            
+            float timer = 0f;
+            Vector3 startPos = introCamera1.transform.position;
+            Vector3 normalizedDirection = camera1MoveDirection.normalized;
+            
+            Debug.Log($"[GameManager] Camera1 Start Position: {startPos}, Move Direction: {normalizedDirection}, Distance: {camera1MoveDistance}");
+            
+            while (timer < intro1Duration)
+            {
+                float progress = timer / intro1Duration;
+                introCamera1.transform.position = startPos + normalizedDirection * (camera1MoveDistance * progress);
+                
+                timer += Time.deltaTime;
+                yield return null;
+            }
+            introCamera1.transform.position = startPos + normalizedDirection * camera1MoveDistance;
+            Debug.Log($"[GameManager] Camera1 Final Position: {introCamera1.transform.position}");
+            introCamera1.gameObject.SetActive(false);
+            introCamera1.depth = -1; // Reset depth
+        }
+        if (introCamera2 != null)
+        {
+            introCamera2.gameObject.SetActive(true);
+            introCamera2.depth = 100;
+            
+            float timer = 0f;
+            Vector3 startPos = introCamera2.transform.position;
+            Quaternion startRot = introCamera2.transform.rotation;
+            Vector3 endPos = startPos + introCamera2.transform.forward * camera2ArcForwardDistance;
+            Vector3 midPoint = (startPos + endPos) * 0.5f;
+            midPoint.y += camera2ArcHeight;
+            Debug.Log($"[GameManager] Camera2 Arc: Start: {startPos}, End: {endPos}, Mid: {midPoint}, Arc Height: {camera2ArcHeight}");
+            
+            while (timer < intro2Duration)
+            {
+                float progress = timer / intro2Duration;
+                Vector3 currentPos = (1f - progress) * (1f - progress) * startPos +2f * (1f - progress) * progress * midPoint +progress * progress * endPos;
+                introCamera2.transform.position = currentPos;
+                introCamera2.transform.rotation = startRot;
+                
+                timer += Time.deltaTime;
+                yield return null;
+            }
+            introCamera2.transform.position = endPos;
+            introCamera2.transform.rotation = startRot;
+            
+            Debug.Log($"[GameManager] Camera2 Final Position: {introCamera2.transform.position}");
+            introCamera2.gameObject.SetActive(false);
+            introCamera2.depth = -1;
+        }
+        if (introBannerUI != null) introBannerUI.SetActive(false);
+        Debug.Log("[GameManager] Intro Sequence Finished locally.");
+        localKart = GetLocalPlayerKart();
+        if (localKart != null && localKart.drivingCamera != null)
+        {
+            // Force toggle: disable first, then enable
+            localKart.drivingCamera.gameObject.SetActive(false);
+            localKart.drivingCamera.enabled = false;
+            yield return null; // Wait one frame
+            localKart.drivingCamera.gameObject.SetActive(true);
+            localKart.drivingCamera.enabled = true;
+            Debug.Log($"[GameManager] Re-enabled local player driving camera: {localKart.drivingCamera.name}");
+        }
+        else
+        {
+            Debug.LogWarning("[GameManager] Could not find local player kart or driving camera!");
+        }
+    }
+    
+    private KartController GetLocalPlayerKart()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
+        {
+            NetworkObject localPlayer = NetworkManager.Singleton.LocalClient.PlayerObject;
+            if (localPlayer != null)
+            {
+                return localPlayer.GetComponentInChildren<KartController>();
+            }
+        }
+        return null;
     }
     
     [ServerRpc]
@@ -372,6 +603,11 @@ public class GameManager : NetworkBehaviour
         return gameStarted.Value;
     }
     
+    public bool IsPlayingIntro()
+    {
+        return isPlayingIntro.Value;
+    }
+    
     public bool IsGameFinished()
     {
         return gameFinished.Value;
@@ -454,7 +690,6 @@ public class GameManager : NetworkBehaviour
         
         if (foundNewFinisher)
         {
-            // Show leaderboard only to the players who finished
             foreach (var client in NetworkManager.Singleton.ConnectedClients)
             {
                 if (client.Value.PlayerObject != null && finishedPlayers.Contains(client.Value.PlayerObject))
@@ -709,7 +944,6 @@ public class GameManager : NetworkBehaviour
     [ClientRpc]
     private void ShowLeaderboardToClientClientRpc(ClientRpcParams rpcParams = default)
     {
-        // Show leaderboard directly to this client only
         LeaderboardUI leaderboardUI = FindFirstObjectByType<LeaderboardUI>();
         if (leaderboardUI != null)
         {
@@ -719,7 +953,6 @@ public class GameManager : NetworkBehaviour
     
     public bool ShouldShowLeaderboard()
     {
-        // Only show leaderboard if the local player has finished
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsClient) return false;
         
         if (NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
@@ -732,7 +965,6 @@ public class GameManager : NetworkBehaviour
             
             if (tracker != null)
             {
-                // Check if local player has finished
                 return tracker.GetLapCount() >= totalLaps;
             }
         }
