@@ -36,6 +36,8 @@ public class GameManager : NetworkBehaviour
     
     private float rankingUpdateTimer = 0f;
     private HashSet<NetworkObject> finishedPlayers = new HashSet<NetworkObject>();
+    private Dictionary<NetworkObject, int> finishOrder = new Dictionary<NetworkObject, int>();
+    private int nextFinishOrder = 1;
     
     public static GameManager Instance { get; private set; }
     
@@ -60,6 +62,8 @@ public class GameManager : NetworkBehaviour
             countdownTime.Value = 0f;
             showLeaderboard.Value = false;
             finishedPlayers.Clear();
+            finishOrder.Clear();
+            nextFinishOrder = 1;
         }
     }
     
@@ -235,6 +239,8 @@ public class GameManager : NetworkBehaviour
                 aiController.speedMultiplier *= speedVariation;
                 aiController.speedVariation = UnityEngine.Random.Range(0.1f, 0.25f);
                 aiController.RecalculateSpeed();
+                
+                aiController.SetStartPosition(0f);
             }
             
             spawnIndex++;
@@ -416,6 +422,7 @@ public class GameManager : NetworkBehaviour
                     if (!finishedPlayers.Contains(playerObj))
                     {
                         finishedPlayers.Add(playerObj);
+                        finishOrder[playerObj] = nextFinishOrder++;
                         foundNewFinisher = true;
                         if (winnerTransform == null)
                         {
@@ -435,6 +442,7 @@ public class GameManager : NetworkBehaviour
                 if (aiObj != null && !finishedPlayers.Contains(aiObj))
                 {
                     finishedPlayers.Add(aiObj);
+                    finishOrder[aiObj] = nextFinishOrder++;
                     foundNewFinisher = true;
                     if (winnerTransform == null)
                     {
@@ -633,6 +641,13 @@ public class GameManager : NetworkBehaviour
             if (a.isFinished != b.isFinished)
             {
                 return b.isFinished.CompareTo(a.isFinished);
+            }
+            
+            if (a.isFinished && b.isFinished)
+            {
+                int orderA = finishOrder.ContainsKey(a.networkObject) ? finishOrder[a.networkObject] : int.MaxValue;
+                int orderB = finishOrder.ContainsKey(b.networkObject) ? finishOrder[b.networkObject] : int.MaxValue;
+                return orderA.CompareTo(orderB);
             }
             
             if (a.lapCount != b.lapCount)

@@ -90,6 +90,7 @@ public class AIKartController : NetworkBehaviour
     private float randomLateralOffset = 0f;
     private float speedChangeTimer = 0f;
     private float lateralChangeTimer = 0f;
+    private bool hasPassedMidpoint = false; // Prevent lap count jitter at start
     
     // Obstacle avoidance state
     private float baseTargetSpeed = 0f;
@@ -296,6 +297,15 @@ public class AIKartController : NetworkBehaviour
         
         if (splinePath == null || kartController == null) return;
         
+        if (splineLength <= 0f && splinePath != null)
+        {
+            splineLength = splinePath.Spline.GetLength();
+            if (splineLength > 0f && currentSplinePosition == 0f && lapCount == 0)
+            {
+                SetStartPosition(0f);
+            }
+        }
+        
         UpdateAILogic();
         ApplyControls();
     }
@@ -349,29 +359,37 @@ public class AIKartController : NetworkBehaviour
             bestT = (currentSplinePosition % 1f) + Mathf.Sign(positionChange) * 0.05f;
         }
         
-        float previousPosition = currentSplinePosition % 1f;
-        currentSplinePosition = currentSplinePosition - (currentSplinePosition % 1f) + bestT;
+        float previousPosition = lastSplinePosition;
+        float newSplinePosition = bestT;
         
-        if (currentSplinePosition < 0f)
+        // Check midpoint to prevent start line jitter
+        if (newSplinePosition > 0.4f && newSplinePosition < 0.6f)
         {
-            currentSplinePosition = 0f;
+            hasPassedMidpoint = true;
         }
         
-        float newSplinePosition = currentSplinePosition % 1f;
+        if (previousPosition > 0.9f && newSplinePosition < 0.1f && previousPosition != 0f)
+        {
+            if (hasPassedMidpoint)
+            {
+                lapCount++;
+                networkLapCount.Value = lapCount;
+                hasPassedMidpoint = false; // Reset for next lap
+                Debug.Log($"[AIKart] {gameObject.name} completed lap {lapCount}! Previous: {previousPosition:F3}, New: {newSplinePosition:F3}");
+            }
+            else
+            {
+                Debug.LogWarning($"[AIKart] {gameObject.name} crossed finish line but skipped midpoint (Jitter ignored). Pos: {previousPosition:F3}->{newSplinePosition:F3}");
+            }
+        }
+        
+        currentSplinePosition = lapCount + newSplinePosition;
+        lastSplinePosition = newSplinePosition;
         
         if (Time.frameCount % 60 == 0)
         {
-            Debug.Log($"[AIKart] {gameObject.name} - lastPos: {lastSplinePosition:F3}, currentPos: {currentSplinePosition:F3}, newPos: {newSplinePosition:F3}, lapCount: {lapCount}");
+            Debug.Log($"[AIKart] {gameObject.name} - lastPos: {previousPosition:F3}, currentPos: {newSplinePosition:F3}, lapCount: {lapCount}, totalProgress: {currentSplinePosition:F3}");
         }
-        
-        if (lastSplinePosition > 0.9f && newSplinePosition < 0.1f)
-        {
-            lapCount++;
-            networkLapCount.Value = lapCount;
-            Debug.Log($"[AIKart] {gameObject.name} completed lap {lapCount}! Last: {lastSplinePosition:F3}, New: {newSplinePosition:F3}, FullPos: {currentSplinePosition:F3}");
-        }
-        
-        lastSplinePosition = newSplinePosition;
         
         float lookAheadT = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
         Vector3 splinePosition = SplineUtility.EvaluatePosition(splinePath.Spline, lookAheadT);
@@ -426,7 +444,7 @@ public class AIKartController : NetworkBehaviour
             ApplyObstacleAvoidance();
         }
         
-        networkSplinePosition.Value = currentSplinePosition;
+        networkSplinePosition.Value = newSplinePosition;
         networkSpeed.Value = currentSpeed;
     }
     
@@ -855,20 +873,37 @@ public class AIKartController : NetworkBehaviour
     
     public void SetStartPosition(float normalizedPosition)
     {
-        currentSplinePosition = Mathf.Clamp01(normalizedPosition);
+        normalizedPosition = Mathf.Clamp01(normalizedPosition);
+        
+        if (IsServer)
+        {
+            lapCount = 0;
+            networkLapCount.Value = 0;
+            hasPassedMidpoint = false;
+        }
+        
+        currentSplinePosition = normalizedPosition;
+        lastSplinePosition = normalizedPosition;
         
         if (splinePath != null)
         {
+            if (splineLength <= 0f)
+            {
+                splineLength = splinePath.Spline.GetLength();
+            }
+            
             Vector3 startPos = splinePath.transform.TransformPoint(
-                SplineUtility.EvaluatePosition(splinePath.Spline, currentSplinePosition)
+                SplineUtility.EvaluatePosition(splinePath.Spline, normalizedPosition)
             );
             transform.position = startPos;
             
-            Vector3 direction = SplineUtility.EvaluateTangent(splinePath.Spline, currentSplinePosition);
+            Vector3 direction = SplineUtility.EvaluateTangent(splinePath.Spline, normalizedPosition);
             if (direction.magnitude > 0.1f)
             {
                 transform.rotation = Quaternion.LookRotation(direction);
             }
+            
+            Debug.Log($"[AIKart] {gameObject.name} SetStartPosition: {normalizedPosition:F3}, lapCount: {lapCount}, networkLapCount: {networkLapCount.Value}");
         }
     }
     
@@ -892,7 +927,7 @@ public class AIKartController : NetworkBehaviour
         
         if (IsServer)
         {
-            return lapCount + currentSplinePosition;
+            return currentSplinePosition;
         }
         else
         {
@@ -914,7 +949,7 @@ public class AIKartController : NetworkBehaviour
         
         if (Time.frameCount % 60 == 0)
         {
-            Debug.Log($"[AIKart] {gameObject.name} - LapCount: {count}, Progress: {GetTotalProgress():F3}");
+            Debug.Log($"[AIKart] {gameObject.name} - LapCount: {count}, Progress: {GetTotalProgress():F3}, Server: {IsServer}, lapCount: {lapCount}, networkLapCount: {networkLapCount.Value}");
         }
         
         return count;
