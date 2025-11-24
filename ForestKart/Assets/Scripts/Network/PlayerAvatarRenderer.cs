@@ -104,7 +104,7 @@ public class PlayerAvatarRenderer : MonoBehaviour
         RenderTexture playerRenderTexture = new RenderTexture(textureWidth, textureHeight, 24);
         avatarRenderTextures[playerObject] = playerRenderTexture;
         
-        RenderAvatarToTexture(targetTransform, playerRenderTexture);
+        RenderAvatarToTexture(targetTransform, playerRenderTexture, playerObject);
         
         return playerRenderTexture;
     }
@@ -143,7 +143,32 @@ public class PlayerAvatarRenderer : MonoBehaviour
         return playerObject.transform;
     }
     
-    private void RenderAvatarToTexture(Transform targetTransform, RenderTexture targetRenderTexture)
+    private Transform GetKartRootTransform(NetworkObject playerObject)
+    {
+        if (playerObject == null || !playerObject.IsSpawned) return null;
+        
+        KartController kart = playerObject.GetComponentInChildren<KartController>();
+        if (kart != null)
+        {
+            return kart.transform;
+        }
+        
+        AIKartController aiKart = playerObject.GetComponentInChildren<AIKartController>();
+        if (aiKart != null)
+        {
+            KartController aiKartController = aiKart.GetComponent<KartController>();
+            if (aiKartController != null)
+            {
+                return aiKartController.transform;
+            }
+            
+            return aiKart.transform;
+        }
+        
+        return playerObject.transform;
+    }
+    
+    private void RenderAvatarToTexture(Transform targetTransform, RenderTexture targetRenderTexture, NetworkObject playerObject = null)
     {
         if (renderCamera == null || targetTransform == null || targetRenderTexture == null)
         {
@@ -153,9 +178,26 @@ public class PlayerAvatarRenderer : MonoBehaviour
         List<GameObject> affectedObjects = new List<GameObject>();
         int targetLayer = GetLayerFromMask(renderLayer);
         
+        Transform kartRoot = null;
+        if (playerObject != null)
+        {
+            kartRoot = GetKartRootTransform(playerObject);
+        }
+        
+        if (kartRoot != null && kartRoot != targetTransform)
+        {
+            SetLayerRecursive(kartRoot.gameObject, targetLayer, affectedObjects);
+        }
+        
         SetLayerRecursive(targetTransform.gameObject, targetLayer, affectedObjects);
         
         Bounds bounds = CalculateBounds(targetTransform.gameObject);
+        if (kartRoot != null && kartRoot != targetTransform)
+        {
+            Bounds kartBounds = CalculateBounds(kartRoot.gameObject);
+            bounds.Encapsulate(kartBounds);
+        }
+        
         Vector3 center = bounds.center;
         float size = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
         
@@ -166,7 +208,7 @@ public class PlayerAvatarRenderer : MonoBehaviour
             adjustedDistance = cameraDistance * (standardSize / size);
         }
         
-        Vector3 targetPosition = center;
+        Vector3 targetPosition = targetTransform.position;
         Vector3 forward = targetTransform.forward;
         
         Vector3 cameraPos = targetPosition + forward * adjustedDistance + cameraOffset;
@@ -280,7 +322,7 @@ public class PlayerAvatarRenderer : MonoBehaviour
         
         if (targetTransformToRender != null && targetRenderTexture != null)
         {
-            RenderAvatarToTexture(targetTransformToRender, targetRenderTexture);
+            RenderAvatarToTexture(targetTransformToRender, targetRenderTexture, playerObject);
         }
     }
     

@@ -129,6 +129,11 @@ public class PlayerProgressTracker : NetworkBehaviour
     
     public float GetTotalProgress()
     {
+        if (splinePath == null || splineLength <= 0f)
+        {
+            return 0f;
+        }
+        
         if (IsServer)
         {
             return lapCount + currentSplinePosition;

@@ -148,13 +148,42 @@ public class LeaderboardUI : MonoBehaviour
             leaderboardContent.GetChild(i).gameObject.SetActive(false);
         }
         
+        Dictionary<NetworkObject, Transform> entryMap = new Dictionary<NetworkObject, Transform>();
+        for (int i = 0; i < leaderboardContent.childCount; i++)
+        {
+            Transform child = leaderboardContent.GetChild(i);
+            LeaderboardEntryUI entryUI = child.GetComponent<LeaderboardEntryUI>();
+            if (entryUI != null && entryUI.networkObject != null)
+            {
+                entryMap[entryUI.networkObject] = child;
+            }
+        }
+        
         for (int i = 0; i < entriesToShow; i++)
         {
             if (i >= entries.Count) break;
             
             var entry = entries[i];
-            Transform entryTransform = leaderboardContent.GetChild(i);
+            Transform entryTransform = null;
+            
+            if (entry.networkObject != null && entryMap.ContainsKey(entry.networkObject))
+            {
+                entryTransform = entryMap[entry.networkObject];
+            }
+            else
+            {
+                entryTransform = leaderboardContent.GetChild(i);
+            }
+            
             entryTransform.gameObject.SetActive(true);
+            entryTransform.SetSiblingIndex(i);
+            
+            LeaderboardEntryUI entryUI = entryTransform.GetComponent<LeaderboardEntryUI>();
+            if (entryUI == null)
+            {
+                entryUI = entryTransform.gameObject.AddComponent<LeaderboardEntryUI>();
+            }
+            entryUI.networkObject = entry.networkObject;
             
             UpdateLeaderboardEntry(entryTransform, entry, i + 1);
         }
@@ -287,4 +316,9 @@ public class LeaderboardEntry
     public bool isFinished;
     public bool isPlayer;
     public bool isAI;
+}
+
+public class LeaderboardEntryUI : MonoBehaviour
+{
+    public NetworkObject networkObject;
 }

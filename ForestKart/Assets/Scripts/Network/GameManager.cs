@@ -486,38 +486,21 @@ public class GameManager : NetworkBehaviour
     
     public int GetPlayerRank(NetworkObject playerObject)
     {
-        if (playerObject == null || raceTrack == null) return 1;
+        if (playerObject == null) return 1;
         
-        float playerProgress = GetVehicleProgress(playerObject);
+        List<LeaderboardEntry> entries = GetAllPlayerRankings();
         
-        int rank = 1;
+        if (entries == null || entries.Count == 0) return 1;
         
-        foreach (var client in NetworkManager.Singleton.ConnectedClients)
+        for (int i = 0; i < entries.Count; i++)
         {
-            if (client.Value.PlayerObject != null && client.Value.PlayerObject != playerObject)
+            if (entries[i].networkObject != null && entries[i].networkObject == playerObject)
             {
-                float otherProgress = GetVehicleProgress(client.Value.PlayerObject);
-                if (otherProgress > playerProgress)
-                {
-                    rank++;
-                }
+                return entries[i].rank;
             }
         }
         
-        AIKartController[] aiKarts = FindObjectsByType<AIKartController>(FindObjectsSortMode.None);
-        foreach (var aiKart in aiKarts)
-        {
-            if (aiKart != null && aiKart.splinePath != null)
-            {
-                float aiProgress = aiKart.GetTotalProgress();
-                if (aiProgress > playerProgress)
-                {
-                    rank++;
-                }
-            }
-        }
-        
-        return rank;
+        return entries.Count;
     }
     
     private float GetVehicleProgress(NetworkObject vehicle)
@@ -551,20 +534,25 @@ public class GameManager : NetworkBehaviour
     
     public int GetTotalVehicleCount()
     {
-        int playerCount = NetworkManager.Singleton.ConnectedClientsIds.Count;
-        int aiCount = FindObjectsByType<AIKartController>(FindObjectsSortMode.None).Length;
-        return playerCount + aiCount;
+        List<LeaderboardEntry> entries = GetAllPlayerRankings();
+        return entries.Count;
     }
     
     public List<LeaderboardEntry> GetAllPlayerRankings()
     {
         List<LeaderboardEntry> entries = new List<LeaderboardEntry>();
+        HashSet<NetworkObject> addedObjects = new HashSet<NetworkObject>();
+        
+        if (NetworkManager.Singleton == null) return entries;
         
         foreach (var client in NetworkManager.Singleton.ConnectedClients)
         {
             if (client.Value.PlayerObject != null)
             {
                 NetworkObject playerObj = client.Value.PlayerObject;
+                if (playerObj == null || !playerObj.IsSpawned) continue;
+                if (addedObjects.Contains(playerObj)) continue;
+                
                 PlayerProgressTracker tracker = playerObj.GetComponent<PlayerProgressTracker>();
                 if (tracker == null)
                 {
@@ -573,17 +561,26 @@ public class GameManager : NetworkBehaviour
                 
                 if (tracker != null)
                 {
+                    float progress = tracker.GetTotalProgress();
+                    int lapCount = tracker.GetLapCount();
+                    
+                    if (float.IsNaN(progress) || float.IsInfinity(progress))
+                    {
+                        progress = 0f;
+                    }
+                    
                     LeaderboardEntry entry = new LeaderboardEntry
                     {
                         networkObject = playerObj,
                         playerName = GetPlayerName(playerObj),
-                        progress = tracker.GetTotalProgress(),
-                        lapCount = tracker.GetLapCount(),
+                        progress = progress,
+                        lapCount = lapCount,
                         isFinished = finishedPlayers.Contains(playerObj),
                         isPlayer = true,
                         isAI = false
                     };
                     entries.Add(entry);
+                    addedObjects.Add(playerObj);
                 }
             }
         }
@@ -603,22 +600,33 @@ public class GameManager : NetworkBehaviour
                     aiObj = aiKart.GetComponentInChildren<NetworkObject>();
                 }
                 
-                if (aiObj != null && aiObj.IsSpawned)
+                if (aiObj != null && aiObj.IsSpawned && !addedObjects.Contains(aiObj))
                 {
+                    float progress = aiKart.GetTotalProgress();
+                    int lapCount = aiKart.GetLapCount();
+                    
+                    if (float.IsNaN(progress) || float.IsInfinity(progress))
+                    {
+                        progress = 0f;
+                    }
+                    
                     LeaderboardEntry entry = new LeaderboardEntry
                     {
                         networkObject = aiObj,
                         playerName = GetAIName(aiKart),
-                        progress = aiKart.GetTotalProgress(),
-                        lapCount = aiKart.GetLapCount(),
+                        progress = progress,
+                        lapCount = lapCount,
                         isFinished = finishedPlayers.Contains(aiObj),
                         isPlayer = false,
                         isAI = true
                     };
                     entries.Add(entry);
+                    addedObjects.Add(aiObj);
                 }
             }
         }
+        
+        if (entries.Count == 0) return entries;
         
         entries.Sort((a, b) =>
         {
@@ -627,7 +635,23 @@ public class GameManager : NetworkBehaviour
                 return b.isFinished.CompareTo(a.isFinished);
             }
             
-            return b.progress.CompareTo(a.progress);
+            if (a.lapCount != b.lapCount)
+            {
+                return b.lapCount.CompareTo(a.lapCount);
+            }
+            
+            float progressDiff = b.progress - a.progress;
+            if (Mathf.Abs(progressDiff) > 0.0001f)
+            {
+                return progressDiff > 0 ? 1 : -1;
+            }
+            
+            if (a.networkObject != null && b.networkObject != null)
+            {
+                return a.networkObject.NetworkObjectId.CompareTo(b.networkObject.NetworkObjectId);
+            }
+            
+            return 0;
         });
         
         for (int i = 0; i < entries.Count; i++)
@@ -702,4 +726,3 @@ public class GameManager : NetworkBehaviour
     }
     
 }
-//why not workling

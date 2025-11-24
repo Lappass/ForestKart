@@ -305,7 +305,9 @@ public class AIKartController : NetworkBehaviour
         currentSpeed = rb.linearVelocity.magnitude;
         float distanceTraveled = currentSpeed * Time.deltaTime;
         float normalizedDistance = distanceTraveled / splineLength;
-        float predictedPos = (currentSplinePosition + normalizedDistance) % 1f;
+        
+        float rawPredictedPos = currentSplinePosition + normalizedDistance;
+        float predictedPos = rawPredictedPos % 1f;
         float searchDist = Mathf.Max(10f, currentSpeed * Time.deltaTime * 2f);
         float searchRange = searchDist / splineLength;
         int searchSteps = 10;
@@ -327,17 +329,49 @@ public class AIKartController : NetworkBehaviour
                 bestDistSq = dSq;
                 bestT = evalT;
             }
-            
-            float positionChange = bestT - currentSplinePosition;
-            if (Mathf.Abs(positionChange) > 0.05f)
-            {
-                bestT = currentSplinePosition + Mathf.Sign(positionChange) * 0.05f;
         }
         
-        currentSplinePosition = bestT;
+        float positionChange = bestT - (currentSplinePosition % 1f);
+        if (Mathf.Abs(positionChange) > 0.5f)
+        {
+            if (positionChange > 0.5f)
+            {
+                positionChange -= 1f;
+            }
+            else if (positionChange < -0.5f)
+            {
+                positionChange += 1f;
+            }
         }
-    
-        currentSplinePosition = Mathf.Repeat(currentSplinePosition, 1f);
+        
+        if (Mathf.Abs(positionChange) > 0.05f)
+        {
+            bestT = (currentSplinePosition % 1f) + Mathf.Sign(positionChange) * 0.05f;
+        }
+        
+        float previousPosition = currentSplinePosition % 1f;
+        currentSplinePosition = currentSplinePosition - (currentSplinePosition % 1f) + bestT;
+        
+        if (currentSplinePosition < 0f)
+        {
+            currentSplinePosition = 0f;
+        }
+        
+        float newSplinePosition = currentSplinePosition % 1f;
+        
+        if (Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"[AIKart] {gameObject.name} - lastPos: {lastSplinePosition:F3}, currentPos: {currentSplinePosition:F3}, newPos: {newSplinePosition:F3}, lapCount: {lapCount}");
+        }
+        
+        if (lastSplinePosition > 0.9f && newSplinePosition < 0.1f)
+        {
+            lapCount++;
+            networkLapCount.Value = lapCount;
+            Debug.Log($"[AIKart] {gameObject.name} completed lap {lapCount}! Last: {lastSplinePosition:F3}, New: {newSplinePosition:F3}, FullPos: {currentSplinePosition:F3}");
+        }
+        
+        lastSplinePosition = newSplinePosition;
         
         float lookAheadT = (currentSplinePosition + lookAheadDistance / splineLength) % 1f;
         Vector3 splinePosition = SplineUtility.EvaluatePosition(splinePath.Spline, lookAheadT);
@@ -391,13 +425,6 @@ public class AIKartController : NetworkBehaviour
         {
             ApplyObstacleAvoidance();
         }
-        
-        if (lastSplinePosition > 0.9f && currentSplinePosition < 0.1f)
-        {
-            lapCount++;
-            networkLapCount.Value = lapCount;
-        }
-        lastSplinePosition = currentSplinePosition;
         
         networkSplinePosition.Value = currentSplinePosition;
         networkSpeed.Value = currentSpeed;
@@ -858,6 +885,11 @@ public class AIKartController : NetworkBehaviour
     
     public float GetTotalProgress()
     {
+        if (splinePath == null || splineLength <= 0f)
+        {
+            return 0f;
+        }
+        
         if (IsServer)
         {
             return lapCount + currentSplinePosition;
@@ -870,14 +902,22 @@ public class AIKartController : NetworkBehaviour
     
     public int GetLapCount()
     {
+        int count = 0;
         if (IsServer)
         {
-            return lapCount;
+            count = lapCount;
         }
         else
         {
-            return networkLapCount.Value;
+            count = networkLapCount.Value;
         }
+        
+        if (Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"[AIKart] {gameObject.name} - LapCount: {count}, Progress: {GetTotalProgress():F3}");
+        }
+        
+        return count;
     }
     
     public float GetSplinePosition()
@@ -906,4 +946,3 @@ public class AIKartController : NetworkBehaviour
         }
     }
 }
-//why not workling

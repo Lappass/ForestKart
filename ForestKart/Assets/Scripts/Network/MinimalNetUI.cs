@@ -89,4 +89,3 @@ public class MinimalNetUI : MonoBehaviour
         }
     }
 }
-//why not workling

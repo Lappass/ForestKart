@@ -631,7 +631,7 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.41742212
+  m_Radius: 0.729207
   m_Height: 4.112833
   m_Direction: 2
   m_Center: {x: 0, y: -0.35125166, z: -0.0963583}
@@ -1264,6 +1264,9 @@ MonoBehaviour:
   steerSensitivity: 1
   lookAheadDistance: 10
   speedSmoothing: 0.5
+  adjustRearWheelFriction: 1
+  rearSidewaysFrictionMultiplier: 1.2
+  rearForwardFrictionMultiplier: 1.1
   speedVariation: 0.15
   lateralRandomness: 3
   speedChangeInterval: 2

@@ -165,6 +165,12 @@ public class GameUI : MonoBehaviour
     {
         if (gameManager == null || rankingText == null) return;
         
+        if (!gameManager.IsGameStarted())
+        {
+            rankingText.text = "-/-";
+            return;
+        }
+        
         Unity.Netcode.NetworkObject localPlayerObject = GetLocalPlayerObject();
         if (localPlayerObject == null)
         {
@@ -174,8 +180,30 @@ public class GameUI : MonoBehaviour
         
         try
         {
-            int rank = gameManager.GetPlayerRank(localPlayerObject);
-            int totalVehicles = gameManager.GetTotalVehicleCount();
+            var entries = gameManager.GetAllPlayerRankings();
+            if (entries == null || entries.Count == 0)
+            {
+                rankingText.text = "-/-";
+                return;
+            }
+            
+            int rank = 1;
+            int totalVehicles = entries.Count;
+            
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].networkObject != null && entries[i].networkObject == localPlayerObject)
+                {
+                    rank = entries[i].rank;
+                    break;
+                }
+            }
+            
+            if (rank <= 0 || totalVehicles <= 0)
+            {
+                rankingText.text = "-/-";
+                return;
+            }
             
             rankingText.text = $"{rank}/{totalVehicles}";
         }
@@ -311,4 +339,3 @@ public class GameUI : MonoBehaviour
         }
     }
 }
-//why not workling why
