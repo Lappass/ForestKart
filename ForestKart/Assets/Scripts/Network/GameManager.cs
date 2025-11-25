@@ -288,13 +288,14 @@ public class GameManager : NetworkBehaviour
              Debug.Log($"[GameManager] Main Camera verified: {mainCamera.name}");
         }
         KartController localKart = GetLocalPlayerKart();
-        if (localKart != null && localKart.drivingCamera != null)
+        CinemachineCamera activeCamera = localKart != null ? localKart.GetActiveDrivingCamera() : null;
+        if (localKart != null && activeCamera != null)
         {
-            localKart.drivingCamera.gameObject.SetActive(false);
-            localKart.drivingCamera.enabled = false;
-            localKart.drivingCamera.gameObject.SetActive(true);
-            localKart.drivingCamera.enabled = true;
-            Debug.Log($"[GameManager] Activated local player driving camera: {localKart.drivingCamera.name}");
+            activeCamera.gameObject.SetActive(false);
+            activeCamera.enabled = false;
+            activeCamera.gameObject.SetActive(true);
+            activeCamera.enabled = true;
+            Debug.Log($"[GameManager] Activated local player driving camera: {activeCamera.name}");
         }
         else
         {
@@ -357,21 +358,26 @@ public class GameManager : NetworkBehaviour
             }
         }
         
-        if (localKart != null && localKart.drivingCamera != null)
+        if (localKart != null)
         {
-            localKart.drivingCamera.gameObject.SetActive(false);
+            CinemachineCamera localActiveCamera = localKart.GetActiveDrivingCamera();
+            if (localActiveCamera != null)
+            {
+                localActiveCamera.gameObject.SetActive(false);
+            }
         }
         else
         {
             KartController[] allKarts = FindObjectsByType<KartController>(FindObjectsSortMode.None);
             foreach (KartController kart in allKarts)
             {
-                if (kart.drivingCamera != null && kart.drivingCamera.gameObject.activeInHierarchy)
+                CinemachineCamera kartCamera = kart.GetActiveDrivingCamera();
+                if (kartCamera != null && kartCamera.gameObject.activeInHierarchy)
                 {
                     NetworkObject kartNetObj = kart.GetComponentInParent<NetworkObject>();
                     if (kartNetObj != null && kartNetObj.IsOwner)
                     {
-                        kart.drivingCamera.gameObject.SetActive(false);
+                        kartCamera.gameObject.SetActive(false);
                     }
                 }
             }
@@ -454,15 +460,16 @@ public class GameManager : NetworkBehaviour
         if (introBannerUI != null) introBannerUI.SetActive(false);
         Debug.Log("[GameManager] Intro Sequence Finished locally.");
         localKart = GetLocalPlayerKart();
-        if (localKart != null && localKart.drivingCamera != null)
+        CinemachineCamera activeCamera = localKart != null ? localKart.GetActiveDrivingCamera() : null;
+        if (localKart != null && activeCamera != null)
         {
             // Force toggle: disable first, then enable
-            localKart.drivingCamera.gameObject.SetActive(false);
-            localKart.drivingCamera.enabled = false;
+            activeCamera.gameObject.SetActive(false);
+            activeCamera.enabled = false;
             yield return null; // Wait one frame
-            localKart.drivingCamera.gameObject.SetActive(true);
-            localKart.drivingCamera.enabled = true;
-            Debug.Log($"[GameManager] Re-enabled local player driving camera: {localKart.drivingCamera.name}");
+            activeCamera.gameObject.SetActive(true);
+            activeCamera.enabled = true;
+            Debug.Log($"[GameManager] Re-enabled local player driving camera: {activeCamera.name}");
         }
         else
         {

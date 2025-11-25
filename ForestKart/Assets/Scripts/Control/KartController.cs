@@ -63,8 +63,12 @@ public class KartController : NetworkBehaviour
     public float speedPenaltySmoothing = 2f;
     
     [Header("Camera Settings")]
-    public CinemachineCamera drivingCamera;
+    public CinemachineCamera drivingCameraFront;
+    public CinemachineCamera drivingCameraBack;
     public CinemachineCamera finishLineCamera;
+    
+    [Tooltip("Current driving camera view (true = front, false = back)")]
+    private bool isFrontCamera = true;
     
     [Header("Character Model")]
     [Tooltip("Transform where the selected driver/character model should be instantiated. Driver model will be spawned here based on player selection.")]
@@ -173,6 +177,8 @@ public class KartController : NetworkBehaviour
         
         if (IsOwner)
         {
+            // Initialize camera: default to front camera
+            InitializeDrivingCameras();
             StartCoroutine(WaitForPositionSync());
             StartCoroutine(SetupPlayerInputDelayed());
         }
@@ -392,14 +398,17 @@ public class KartController : NetworkBehaviour
         
         Debug.Log("[KartController] Switching camera: driving -> finish line");
         
-        if (drivingCamera != null)
+        // Disable both driving cameras
+        if (drivingCameraFront != null)
         {
-            drivingCamera.gameObject.SetActive(false);
-            Debug.Log($"[KartController] Disabled driving camera: {drivingCamera.name}");
+            drivingCameraFront.gameObject.SetActive(false);
+            Debug.Log($"[KartController] Disabled driving front camera: {drivingCameraFront.name}");
         }
-        else
+        
+        if (drivingCameraBack != null)
         {
-            Debug.LogWarning("[KartController] Driving camera not found!");
+            drivingCameraBack.gameObject.SetActive(false);
+            Debug.Log($"[KartController] Disabled driving back camera: {drivingCameraBack.name}");
         }
         
         if (finishLineCamera != null)
@@ -421,6 +430,110 @@ public class KartController : NetworkBehaviour
         }
         
         Debug.Log("[KartController] Camera switch complete");
+    }
+    
+    public void OnSwitchCamera(InputValue value)
+    {
+        if (!IsOwner || !controlsEnabled) return;
+        
+        if (value.isPressed)
+        {
+            SwitchCamera();
+        }
+    }
+    
+    /// <summary>
+    /// Initializes the driving cameras - sets front camera as active by default
+    /// </summary>
+    private void InitializeDrivingCameras()
+    {
+        isFrontCamera = true;
+        
+        // Disable back camera
+        if (drivingCameraBack != null)
+        {
+            drivingCameraBack.gameObject.SetActive(false);
+        }
+        
+        // Enable front camera
+        if (drivingCameraFront != null)
+        {
+            drivingCameraFront.gameObject.SetActive(true);
+            drivingCameraFront.enabled = true;
+            Debug.Log("[KartController] Initialized with front camera");
+        }
+        else if (drivingCameraBack != null)
+        {
+            // Fallback: if front camera is not set, use back camera
+            drivingCameraBack.gameObject.SetActive(true);
+            drivingCameraBack.enabled = true;
+            isFrontCamera = false;
+            Debug.Log("[KartController] Front camera not set, using back camera as fallback");
+        }
+    }
+    
+    /// <summary>
+    /// Gets the currently active driving camera (front or back)
+    /// </summary>
+    public CinemachineCamera GetActiveDrivingCamera()
+    {
+        if (isFrontCamera && drivingCameraFront != null)
+        {
+            return drivingCameraFront;
+        }
+        else if (!isFrontCamera && drivingCameraBack != null)
+        {
+            return drivingCameraBack;
+        }
+        // Fallback: return front camera if available, otherwise back
+        return drivingCameraFront != null ? drivingCameraFront : drivingCameraBack;
+    }
+    
+    private void SwitchCamera()
+    {
+        if (!IsOwner) return;
+        
+        isFrontCamera = !isFrontCamera;
+        
+        if (isFrontCamera)
+        {
+            // Switch to front camera
+            if (drivingCameraBack != null)
+            {
+                drivingCameraBack.gameObject.SetActive(false);
+            }
+            if (drivingCameraFront != null)
+            {
+                drivingCameraFront.gameObject.SetActive(true);
+                drivingCameraFront.enabled = true;
+                Debug.Log("[KartController] Switched to front camera");
+            }
+        }
+        else
+        {
+            // Switch to back camera
+            if (drivingCameraFront != null)
+            {
+                drivingCameraFront.gameObject.SetActive(false);
+            }
+            if (drivingCameraBack != null)
+            {
+                drivingCameraBack.gameObject.SetActive(true);
+                drivingCameraBack.enabled = true;
+                Debug.Log("[KartController] Switched to back camera");
+            }
+        }
+        
+        // Update LocalPlayerSetup camera reference
+        var localPlayerSetup = GetComponentInParent<LocalPlayerSetup>();
+        if (localPlayerSetup != null)
+        {
+            CinemachineCamera activeCamera = GetActiveDrivingCamera();
+            if (activeCamera != null)
+            {
+                localPlayerSetup.UpdateCameraReference(activeCamera);
+            }
+        }
     }
     
     private System.Collections.IEnumerator SetupPlayerInputDelayed()

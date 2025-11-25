@@ -286,7 +286,7 @@ public class CharacterSelectionUI : NetworkBehaviour
             currentDisplayCharacter = Instantiate(prefab, characterDisplayParent);
             currentDisplayCharacter.transform.localPosition = Vector3.zero;
             currentDisplayCharacter.transform.localRotation = Quaternion.identity;
-            currentDisplayCharacter.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            currentDisplayCharacter.transform.localScale = Vector3.one;
             
             NetworkObject netObj = currentDisplayCharacter.GetComponent<NetworkObject>();
             if (netObj != null)

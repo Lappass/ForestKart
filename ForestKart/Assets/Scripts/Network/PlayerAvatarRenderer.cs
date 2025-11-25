@@ -15,7 +15,7 @@ public class PlayerAvatarRenderer : MonoBehaviour
     public bool enableRealTimeUpdate = true;
     public float updateInterval = 0.2f;
     
-    private Camera renderCamera;
+    public Camera renderCamera;
     private RenderTexture renderTexture;
     private Dictionary<NetworkObject, RenderTexture> avatarRenderTextures = new Dictionary<NetworkObject, RenderTexture>();
     private Dictionary<NetworkObject, Transform> targetTransforms = new Dictionary<NetworkObject, Transform>();
