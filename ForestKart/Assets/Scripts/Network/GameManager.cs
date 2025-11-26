@@ -283,6 +283,13 @@ public class GameManager : NetworkBehaviour
     [ClientRpc]
     private void ActivatePlayerCamerasClientRpc()
     {
+        // Don't activate cameras if intro is still playing
+        if (isPlayingIntro.Value)
+        {
+            Debug.Log("[GameManager] Intro is still playing, skipping camera activation in ActivatePlayerCamerasClientRpc");
+            return;
+        }
+        
         if (mainCamera != null)
         {
              Debug.Log($"[GameManager] Main Camera verified: {mainCamera.name}");
@@ -358,30 +365,34 @@ public class GameManager : NetworkBehaviour
             }
         }
         
-        if (localKart != null)
+        // Function to disable all driving cameras
+        void DisableAllDrivingCameras()
         {
-            CinemachineCamera localActiveCamera = localKart.GetActiveDrivingCamera();
-            if (localActiveCamera != null)
-            {
-                localActiveCamera.gameObject.SetActive(false);
-            }
-        }
-        else
-        {
+            // Always check all karts to ensure we catch all players (especially in multiplayer)
             KartController[] allKarts = FindObjectsByType<KartController>(FindObjectsSortMode.None);
             foreach (KartController kart in allKarts)
             {
-                CinemachineCamera kartCamera = kart.GetActiveDrivingCamera();
-                if (kartCamera != null && kartCamera.gameObject.activeInHierarchy)
+                NetworkObject kartNetObj = kart.GetComponentInParent<NetworkObject>();
+                if (kartNetObj != null && kartNetObj.IsOwner)
                 {
-                    NetworkObject kartNetObj = kart.GetComponentInParent<NetworkObject>();
-                    if (kartNetObj != null && kartNetObj.IsOwner)
+                    if (kart.drivingCameraFront != null)
                     {
-                        kartCamera.gameObject.SetActive(false);
+                        kart.drivingCameraFront.Priority = 0;
+                        kart.drivingCameraFront.gameObject.SetActive(false);
+                        kart.drivingCameraFront.enabled = false;
+                    }
+                    if (kart.drivingCameraBack != null)
+                    {
+                        kart.drivingCameraBack.Priority = 0;
+                        kart.drivingCameraBack.gameObject.SetActive(false);
+                        kart.drivingCameraBack.enabled = false;
                     }
                 }
             }
         }
+        
+        // Disable cameras initially
+        DisableAllDrivingCameras();
         if (mainCamera == null)
         {
             mainCamera = Camera.main;
@@ -416,6 +427,9 @@ public class GameManager : NetworkBehaviour
             
             while (timer < intro1Duration)
             {
+                // Continuously disable driving cameras during intro
+                DisableAllDrivingCameras();
+                
                 float progress = timer / intro1Duration;
                 introCamera1.transform.position = startPos + normalizedDirection * (camera1MoveDistance * progress);
                 
@@ -442,6 +456,9 @@ public class GameManager : NetworkBehaviour
             
             while (timer < intro2Duration)
             {
+                // Continuously disable driving cameras during intro
+                DisableAllDrivingCameras();
+                
                 float progress = timer / intro2Duration;
                 Vector3 currentPos = (1f - progress) * (1f - progress) * startPos +2f * (1f - progress) * progress * midPoint +progress * progress * endPos;
                 introCamera2.transform.position = currentPos;
@@ -459,21 +476,36 @@ public class GameManager : NetworkBehaviour
         }
         if (introBannerUI != null) introBannerUI.SetActive(false);
         Debug.Log("[GameManager] Intro Sequence Finished locally.");
+        
+        // Wait a bit to ensure intro cameras are fully disabled
+        yield return new WaitForSeconds(0.1f);
+        
         localKart = GetLocalPlayerKart();
-        CinemachineCamera activeCamera = localKart != null ? localKart.GetActiveDrivingCamera() : null;
-        if (localKart != null && activeCamera != null)
+        if (localKart != null)
         {
-            // Force toggle: disable first, then enable
-            activeCamera.gameObject.SetActive(false);
-            activeCamera.enabled = false;
-            yield return null; // Wait one frame
-            activeCamera.gameObject.SetActive(true);
-            activeCamera.enabled = true;
-            Debug.Log($"[GameManager] Re-enabled local player driving camera: {activeCamera.name}");
+            // Force initialize cameras if they haven't been initialized yet
+            // This will be handled by InitializeCamerasAfterIntroCheck, but we can trigger it here too
+            yield return new WaitForSeconds(0.1f);
+            
+            CinemachineCamera activeCamera = localKart.GetActiveDrivingCamera();
+            if (activeCamera != null)
+            {
+                // Force toggle: disable first, then enable
+                activeCamera.gameObject.SetActive(false);
+                activeCamera.enabled = false;
+                yield return null; // Wait one frame
+                activeCamera.gameObject.SetActive(true);
+                activeCamera.enabled = true;
+                Debug.Log($"[GameManager] Re-enabled local player driving camera: {activeCamera.name}");
+            }
+            else
+            {
+                Debug.LogWarning("[GameManager] Active driving camera is null, cameras may not be initialized yet.");
+            }
         }
         else
         {
-            Debug.LogWarning("[GameManager] Could not find local player kart or driving camera!");
+            Debug.LogWarning("[GameManager] Could not find local player kart!");
         }
     }
     

@@ -29,27 +29,33 @@ public class LocalPlayerSetup : NetworkBehaviour
         base.OnNetworkSpawn();
         if (IsOwner)
         {
-            // Check if intro is playing
+            // Check if game has started - if so, intro might be playing
+            bool gameStarted = false;
             bool isIntroPlaying = false;
             if (GameManager.Instance != null)
             {
+                gameStarted = GameManager.Instance.IsGameStarted();
                 isIntroPlaying = GameManager.Instance.IsPlayingIntro();
             }
             
-            if (!isIntroPlaying)
+            // If game just started, always assume intro is playing (network sync delay workaround)
+            // Camera will be enabled after intro ends
+            if (gameStarted || isIntroPlaying)
             {
-                EnableLocalComponents();
-            }
-            else
-            {
-                // Disable components initially if intro is playing
-                DisableNonLocalComponents(); // Effectively disables camera
-                // But we might want to keep audio listener? Let's just disable camera specifically
+                Debug.Log($"[LocalPlayerSetup] Game started or intro playing, disabling camera initially. gameStarted={gameStarted}, isIntroPlaying={isIntroPlaying}");
+                DisableNonLocalComponents();
                 if (cinemachineCamera != null) 
                 {
+                    cinemachineCamera.Priority = 0;
                     cinemachineCamera.enabled = false;
                     cinemachineCamera.gameObject.SetActive(false);
                 }
+                // Enable audio listener but not camera
+                if (audioListener != null) audioListener.enabled = true;
+            }
+            else
+            {
+                EnableLocalComponents();
             }
         }
         else
@@ -61,6 +67,14 @@ public class LocalPlayerSetup : NetworkBehaviour
     public void SetCameraEnabled(bool isEnabled)
     {
         if (!IsOwner) return;
+        
+        // Don't enable camera if intro is playing
+        bool isIntroPlaying = GameManager.Instance != null && GameManager.Instance.IsPlayingIntro();
+        if (isEnabled && isIntroPlaying)
+        {
+            Debug.Log("[LocalPlayerSetup] SetCameraEnabled(true) blocked - intro is playing");
+            return;
+        }
         
         Debug.Log($"[LocalPlayerSetup] SetCameraEnabled({isEnabled}) called");
         
@@ -77,6 +91,7 @@ public class LocalPlayerSetup : NetworkBehaviour
             }
             else
             {
+                cinemachineCamera.Priority = 0;
                 cinemachineCamera.enabled = false;
                 cinemachineCamera.gameObject.SetActive(false);
             }
@@ -100,10 +115,23 @@ public class LocalPlayerSetup : NetworkBehaviour
     }
     private void EnableLocalComponents()
     {
-        if (cinemachineCamera != null)
+        // Don't enable camera if intro is playing or game just started
+        bool isIntroPlaying = GameManager.Instance != null && GameManager.Instance.IsPlayingIntro();
+        bool gameStarted = GameManager.Instance != null && GameManager.Instance.IsGameStarted();
+        
+        if (cinemachineCamera != null && !isIntroPlaying && !gameStarted)
         {
             cinemachineCamera.enabled = true;
         }
+        else if (cinemachineCamera != null)
+        {
+            // Ensure camera stays disabled during intro
+            cinemachineCamera.Priority = 0;
+            cinemachineCamera.enabled = false;
+            cinemachineCamera.gameObject.SetActive(false);
+            Debug.Log("[LocalPlayerSetup] EnableLocalComponents: Camera kept disabled because intro/game is active");
+        }
+        
         if (audioListener != null)
         {
             audioListener.enabled = true;
