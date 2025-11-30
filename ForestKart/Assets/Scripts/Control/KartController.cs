@@ -731,13 +731,24 @@ public class KartController : NetworkBehaviour
     /// </summary>
     public void OnHitByProjectile(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
-        // Check if this is an AI kart
-        bool isAI = GetComponent<AIKartController>() != null;
+        // Check if this is an AI kart - check on self, parent, and root
+        bool isAI = GetComponent<AIKartController>() != null || 
+                    GetComponentInParent<AIKartController>() != null ||
+                    transform.root.GetComponent<AIKartController>() != null;
+        
+        Debug.Log($"[KartController] OnHitByProjectile on {gameObject.name}: isAI={isAI}, IsServer={IsServer}, IsOwner={IsOwner}");
         
         if (isAI)
         {
-            // AI: Apply effect directly on server
-            ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
+            // AI: Apply effect directly on server (must be on server)
+            if (IsServer)
+            {
+                ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
+            }
+            else
+            {
+                Debug.LogError($"[KartController] AI kart {gameObject.name} hit but not on server! This should not happen.");
+            }
         }
         else
         {
@@ -751,14 +762,36 @@ public class KartController : NetworkBehaviour
     /// </summary>
     private void ApplyHitEffectOnServer(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
-        Debug.Log($"[KartController] AI {gameObject.name} hit by projectile on server! force: {force}");
-        
-        Rigidbody kartRb = GetComponent<Rigidbody>();
-        if (kartRb != null)
+        if (!IsServer)
         {
+            Debug.LogError($"[KartController] ApplyHitEffectOnServer called on non-server for {gameObject.name}!");
+            return;
+        }
+        
+        Debug.Log($"[KartController] Applying hit effect to AI {gameObject.name} on server! force: {force}, direction: {hitDirection}");
+        
+        // Find Rigidbody - check self, parent, and root
+        Rigidbody kartRb = GetComponent<Rigidbody>();
+        if (kartRb == null)
+        {
+            kartRb = GetComponentInParent<Rigidbody>();
+        }
+        if (kartRb == null)
+        {
+            kartRb = transform.root.GetComponent<Rigidbody>();
+        }
+        if (kartRb == null)
+        {
+            Debug.LogError($"[KartController] Could not find Rigidbody on AI {gameObject.name} (checked self, parent, root)!");
+            // Still apply stun even if no Rigidbody found
+        }
+        else
+        {
+            Debug.Log($"[KartController] Found Rigidbody on {kartRb.gameObject.name} for AI {gameObject.name}");
             kartRb.linearVelocity = kartRb.linearVelocity * 0.3f;
             kartRb.AddForce(hitDirection * force, ForceMode.Impulse);
             kartRb.AddTorque(Vector3.up * torque, ForceMode.Impulse);
+            Debug.Log($"[KartController] Applied force {force} to AI {gameObject.name}");
         }
         
         StartCoroutine(StunCoroutine(stunDuration));

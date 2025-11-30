@@ -354,7 +354,12 @@ public class ShellProjectile : NetworkBehaviour
         if (hasHit) return;
         hasHit = true;
         
-        Debug.Log($"[ShellProjectile] Hitting kart: {kart.gameObject.name}");
+        // Check if this is an AI kart before hitting
+        bool isAI = kart.GetComponent<AIKartController>() != null || 
+                    kart.GetComponentInParent<AIKartController>() != null ||
+                    kart.transform.root.GetComponent<AIKartController>() != null;
+        
+        Debug.Log($"[ShellProjectile] Hitting kart: {kart.gameObject.name}, isAI: {isAI}, IsServer: {IsServer}");
         
         Vector3 hitDirection = (kart.transform.position - transform.position);
         float distance = hitDirection.magnitude;
@@ -369,6 +374,7 @@ public class ShellProjectile : NetworkBehaviour
         float actualForce = hitForce * 1.5f;
         float torqueAmount = Random.Range(500f, 1500f);
         
+        Debug.Log($"[ShellProjectile] Calling OnHitByProjectile on {kart.gameObject.name} with force: {actualForce}");
         kart.OnHitByProjectile(hitDirection, actualForce, torqueAmount, stunDuration);
         
         HitKartClientRpc();
