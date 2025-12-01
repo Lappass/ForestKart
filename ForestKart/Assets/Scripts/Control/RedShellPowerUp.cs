@@ -1,8 +1,4 @@
 using UnityEngine;
-
-/// <summary>
-/// Red Shell Power Up - auto-tracking shell (like Mario Kart)
-/// </summary>
 [CreateAssetMenu(fileName = "RedShell", menuName = "PowerUp/Red Shell")]
 public class RedShellPowerUp : PowerUp
 {

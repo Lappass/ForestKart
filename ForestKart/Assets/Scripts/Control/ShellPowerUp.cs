@@ -1,8 +1,4 @@
 using UnityEngine;
-
-/// <summary>
-/// Shell Power Up - shell projectile (like Mario Kart)
-/// </summary>
 [CreateAssetMenu(fileName = "Shell", menuName = "PowerUp/Shell")]
 public class ShellPowerUp : PowerUp
 {

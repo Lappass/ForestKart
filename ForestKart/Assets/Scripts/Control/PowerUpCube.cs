@@ -1,10 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
 using System.Collections;
-
-/// <summary>
-/// Power Up Cube - collectible on the track
-/// </summary>
 [RequireComponent(typeof(Collider))]
 public class PowerUpCube : NetworkBehaviour
 {
@@ -125,8 +121,6 @@ public class PowerUpCube : NetworkBehaviour
             if (powerUpSystem != null)
             {
                 powerUpSystem.AcquireRandomPowerUpServerRpc();
-                
-                // Directly handle collection on server (don't use ServerRpc from server)
                 CollectCube();
             }
         }

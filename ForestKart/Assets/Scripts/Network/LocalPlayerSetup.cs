@@ -146,6 +146,25 @@ public class LocalPlayerSetup : NetworkBehaviour
     }
     private void DisableNonLocalComponents()
     {
+        // Force disable all PlayerInput components on non-local players (including children and parent)
+        // Check children first
+        UnityEngine.InputSystem.PlayerInput[] childInputs = GetComponentsInChildren<UnityEngine.InputSystem.PlayerInput>(true);
+        foreach (var input in childInputs)
+        {
+            input.enabled = false;
+            input.DeactivateInput();
+            Debug.Log($"[LocalPlayerSetup] Disabled PlayerInput on non-local object (child): {input.gameObject.name}");
+        }
+        
+        // Check parent as well, just in case LocalPlayerSetup is on a child but PlayerInput is on root
+        UnityEngine.InputSystem.PlayerInput parentInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
+        if (parentInput != null)
+        {
+            parentInput.enabled = false;
+            parentInput.DeactivateInput();
+            Debug.Log($"[LocalPlayerSetup] Disabled PlayerInput on non-local object (parent): {parentInput.gameObject.name}");
+        }
+
         if (cinemachineCamera != null)
         {
             cinemachineCamera.enabled = false;

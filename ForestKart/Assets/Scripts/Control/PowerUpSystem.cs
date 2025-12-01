@@ -3,9 +3,6 @@ using System.Collections;
 using Unity.Netcode;
 using System.Collections.Generic;
 
-/// <summary>
-/// Power Up System - manages player power up state
-/// </summary>
 [RequireComponent(typeof(KartController))]
 public class PowerUpSystem : NetworkBehaviour
 {
@@ -31,7 +28,6 @@ public class PowerUpSystem : NetworkBehaviour
     private bool hasSpeedBoost = false;
     private float originalMaxSpeed = 0f;
     private float originalDriveTorque = 0f;
-    private GameObject shieldEffect = null;
     
     private void Awake()
     {
@@ -106,9 +102,6 @@ public class PowerUpSystem : NetworkBehaviour
         }
     }
     
-    /// <summary>
-    /// Acquire a random power up
-    /// </summary>
     [ServerRpc(RequireOwnership = false)]
     public void AcquireRandomPowerUpServerRpc()
     {
@@ -144,9 +137,6 @@ public class PowerUpSystem : NetworkBehaviour
         }
     }
     
-    /// <summary>
-    /// Use current power up
-    /// </summary>
     public void UsePowerUp()
     {
         if (!hasPowerUp.Value || currentPowerUpTypeIndex.Value < 0)
@@ -280,9 +270,6 @@ public class PowerUpSystem : NetworkBehaviour
         }
     }
     
-    /// <summary>
-    /// Apply speed boost effect
-    /// </summary>
     public IEnumerator ApplySpeedBoost(KartController kart, float multiplier, float duration)
     {
         if (hasSpeedBoost || kart == null) yield break;
@@ -317,64 +304,17 @@ public class PowerUpSystem : NetworkBehaviour
         }
     }
     
-    /// <summary>
-    /// Apply shield effect
-    /// </summary>
-    public IEnumerator ApplyShield(KartController kart, GameObject shieldPrefab, float duration)
-    {
-        if (shieldEffect != null || kart == null) yield break;
-        
-        if (shieldPrefab != null)
-        {
-            shieldEffect = Instantiate(shieldPrefab, kart.transform);
-            shieldEffect.transform.localPosition = Vector3.zero;
-            shieldEffect.transform.localRotation = Quaternion.identity;
-            
-            NetworkObject netObj = shieldEffect.GetComponent<NetworkObject>();
-            if (netObj != null) Destroy(netObj);
-        }
-        
-        // TODO: Implement shield logic (damage prevention etc.)
-        
-        if (showDebugInfo)
-        {
-            Debug.Log($"[PowerUpSystem] Shield applied for {duration}s on {kart.gameObject.name}");
-        }
-        
-        yield return new WaitForSeconds(duration);
-        
-        if (kart != null && shieldEffect != null)
-        {
-            Destroy(shieldEffect);
-            shieldEffect = null;
-        }
-        
-        if (showDebugInfo)
-        {
-            Debug.Log($"[PowerUpSystem] Shield ended");
-        }
-    }
-    
-    /// <summary>
-    /// Check if has power up
-    /// </summary>
     public bool HasPowerUp()
     {
         return hasPowerUp.Value;
     }
     
-    /// <summary>
-    /// Get current power up type
-    /// </summary>
     public PowerUpType GetCurrentPowerUpType()
     {
         if (currentPowerUp == null) return PowerUpType.SpeedBoost;
         return currentPowerUp.type;
     }
     
-    /// <summary>
-    /// Fire shell (throw forward)
-    /// </summary>
     public void FireShell(KartController kart, GameObject shellPrefab, float speed, float hitForce, float stunDuration)
     {
         if (kart == null || shellPrefab == null) return;
@@ -438,9 +378,6 @@ public class PowerUpSystem : NetworkBehaviour
         netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
     }
     
-    /// <summary>
-    /// Fire red shell (auto-track nearest enemy)
-    /// </summary>
     public void FireRedShell(KartController kart, GameObject redShellPrefab, float speed, float hitForce, float stunDuration, float trackingRange)
     {
         if (kart == null || redShellPrefab == null) return;
@@ -506,137 +443,6 @@ public class PowerUpSystem : NetworkBehaviour
         netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
     }
     
-    /// <summary>
-    /// Fire missile (track nearest enemy)
-    /// </summary>
-    public void FireMissile(KartController kart, GameObject missilePrefab, float speed, float trackingRange, float hitForce, float stunDuration)
-    {
-        if (kart == null || missilePrefab == null) return;
-        
-        int prefabIndex = -1;
-        for (int i = 0; i < availablePowerUps.Length; i++)
-        {
-            if (availablePowerUps[i] is MissilePowerUp missilePowerUp && missilePowerUp.missilePrefab == missilePrefab)
-            {
-                prefabIndex = i;
-                break;
-            }
-        }
-        
-        if (prefabIndex < 0)
-        {
-            Debug.LogWarning("[PowerUpSystem] Missile prefab not found in availablePowerUps!");
-            return;
-        }
-        
-        FireMissileServerRpc(kart.OwnerClientId, prefabIndex, speed, trackingRange, hitForce, stunDuration);
-    }
-    
-    [ServerRpc(RequireOwnership = false)]
-    private void FireMissileServerRpc(ulong ownerId, int prefabIndex, float speed, float trackingRange, float hitForce, float stunDuration)
-    {
-        KartController kart = NetworkManager.Singleton.ConnectedClients[ownerId].PlayerObject?.GetComponentInChildren<KartController>();
-        if (kart == null) return;
-        
-        if (prefabIndex < 0 || prefabIndex >= availablePowerUps.Length) return;
-        
-        MissilePowerUp missilePowerUp = availablePowerUps[prefabIndex] as MissilePowerUp;
-        if (missilePowerUp == null || missilePowerUp.missilePrefab == null) return;
-        
-        GameObject missilePrefab = missilePowerUp.missilePrefab;
-        
-        Transform target = FindNearestEnemy(kart.transform, trackingRange);
-        
-        Vector3 spawnPos = kart.transform.position + kart.transform.forward * 2f + Vector3.up * 1f;
-        GameObject missile = Instantiate(missilePrefab, spawnPos, kart.transform.rotation);
-        
-        MissileProjectile missileScript = missile.GetComponent<MissileProjectile>();
-        if (missileScript == null)
-        {
-            missileScript = missile.AddComponent<MissileProjectile>();
-        }
-        
-        NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
-        if (kartNetObj == null)
-        {
-            kartNetObj = kart.GetComponentInParent<NetworkObject>();
-        }
-        Transform ownerTransform = kartNetObj != null ? kartNetObj.transform : kart.transform;
-        
-        missileScript.SetParameters(target, speed, hitForce, stunDuration);
-        
-        NetworkObject netObj = missile.GetComponent<NetworkObject>();
-        if (netObj == null)
-        {
-            netObj = missile.AddComponent<NetworkObject>();
-        }
-        
-        netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
-    }
-    
-    /// <summary>
-    /// Drop oil slick (behind kart)
-    /// </summary>
-    public void DropOilSlick(KartController kart, GameObject oilSlickPrefab, float duration, float speedReduction)
-    {
-        if (kart == null || oilSlickPrefab == null) return;
-        
-        int prefabIndex = -1;
-        for (int i = 0; i < availablePowerUps.Length; i++)
-        {
-            if (availablePowerUps[i] is OilSlickPowerUp oilPowerUp && oilPowerUp.oilSlickPrefab == oilSlickPrefab)
-            {
-                prefabIndex = i;
-                break;
-            }
-        }
-        
-        if (prefabIndex < 0)
-        {
-            Debug.LogWarning("[PowerUpSystem] Oil slick prefab not found in availablePowerUps!");
-            return;
-        }
-        
-        DropOilSlickServerRpc(kart.OwnerClientId, prefabIndex, duration, speedReduction);
-    }
-    
-    [ServerRpc(RequireOwnership = false)]
-    private void DropOilSlickServerRpc(ulong ownerId, int prefabIndex, float duration, float speedReduction)
-    {
-        KartController kart = NetworkManager.Singleton.ConnectedClients[ownerId].PlayerObject?.GetComponentInChildren<KartController>();
-        if (kart == null) return;
-        
-        if (prefabIndex < 0 || prefabIndex >= availablePowerUps.Length) return;
-        
-        OilSlickPowerUp oilPowerUp = availablePowerUps[prefabIndex] as OilSlickPowerUp;
-        if (oilPowerUp == null || oilPowerUp.oilSlickPrefab == null) return;
-        
-        GameObject oilSlickPrefab = oilPowerUp.oilSlickPrefab;
-        
-        Vector3 dropPos = kart.transform.position - kart.transform.forward * 2f;
-        dropPos.y = 0f;
-        
-        GameObject oilSlick = Instantiate(oilSlickPrefab, dropPos, Quaternion.identity);
-        
-        NetworkObject netObj = oilSlick.GetComponent<NetworkObject>();
-        if (netObj == null)
-        {
-            netObj = oilSlick.AddComponent<NetworkObject>();
-        }
-        
-        netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
-        
-        OilSlick slickScript = oilSlick.GetComponent<OilSlick>();
-        if (slickScript == null)
-        {
-            slickScript = oilSlick.AddComponent<OilSlick>();
-        }
-        slickScript.Initialize(duration, speedReduction);
-    }
-    
-    /// <summary>
-    /// Find nearest enemy
-    /// </summary>
     private Transform FindNearestEnemy(Transform self, float range)
     {
         Transform nearest = null;

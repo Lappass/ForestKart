@@ -1,8 +1,4 @@
 using UnityEngine;
-
-/// <summary>
-/// Speed Boost Power Up - increases speed
-/// </summary>
 [CreateAssetMenu(fileName = "SpeedBoost", menuName = "PowerUp/Speed Boost")]
 public class SpeedBoostPowerUp : PowerUp
 {

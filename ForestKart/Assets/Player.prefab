@@ -1354,10 +1354,8 @@ MonoBehaviour:
   powerUpAttachPoint: {fileID: 1171882316880006434}
   autoFindAttachPoint: 1
   availablePowerUps:
-  - {fileID: 11400000, guid: 7d589f73c99f3e04bb2a366e01aee6be, type: 2}
   - {fileID: 11400000, guid: 33c6a74b37646ea428c33d828080389b, type: 2}
   - {fileID: 11400000, guid: 7d1796b0fa1d2b0498fea8007b111c16, type: 2}
-  - {fileID: 11400000, guid: 2969af41a2f49e143a3676c706cc8f60, type: 2}
   showDebugInfo: 0
 --- !u!1 &3160320818565008242
 GameObject:

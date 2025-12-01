@@ -93,17 +93,15 @@ public class KartController : NetworkBehaviour
     
     void Awake()
     {
-        // CRITICAL: Disable PlayerInput immediately in Awake
         // Will be enabled later only for local player
-        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        // Search in parent as well since PlayerInput might be on the root object
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             playerInput.enabled = false;
             playerInput.DeactivateInput();
-            Debug.Log("[KartController] Awake: Disabled PlayerInput");
+            Debug.Log($"[KartController] Awake: Disabled PlayerInput on {playerInput.gameObject.name}");
         }
-        
-        // CRITICAL: Disable cameras immediately in Awake (before any other script runs)
         // This ensures cameras are off during intro sequence in multiplayer
         if (drivingCameraFront != null)
         {
@@ -190,8 +188,6 @@ public class KartController : NetworkBehaviour
         {
             controlsEnabled = false;
         }
-        
-        // IMPORTANT: Disable cameras at start - they will be enabled after intro ends
         // This prevents cameras from being active during intro sequence
         if (drivingCameraFront != null)
         {
@@ -234,12 +230,13 @@ public class KartController : NetworkBehaviour
         else
         {
             // Non-local player: ensure PlayerInput is completely disabled
-            UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+            // Search in parent as well
+            UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
             if (playerInput != null)
             {
                 playerInput.enabled = false;
                 playerInput.DeactivateInput();
-                Debug.Log($"[KartController] OnNetworkSpawn: Disabled PlayerInput for non-owner {gameObject.name}");
+                Debug.Log($"[KartController] OnNetworkSpawn: Disabled PlayerInput for non-owner {gameObject.name} (found on {playerInput.gameObject.name})");
             }
             
             // Disable cameras
@@ -424,6 +421,18 @@ public class KartController : NetworkBehaviour
                 driverKartController.enabled = false;
                 Destroy(driverKartController);
             }
+
+            // Disable PlayerInput on the instantiated model if it exists
+            if (!IsOwner)
+            {
+                var playerInputs = currentDriverModel.GetComponentsInChildren<UnityEngine.InputSystem.PlayerInput>(true);
+                foreach (var input in playerInputs)
+                {
+                    input.enabled = false;
+                    input.DeactivateInput();
+                    Debug.Log($"[KartController] Disabled PlayerInput on non-local driver model: {input.gameObject.name}");
+                }
+            }
             
             Debug.Log($"[KartController] Successfully spawned driver model '{driverModelFromPrefab.name}' for client {clientId} under {driverModelParent.name} at position {currentDriverModel.transform.localPosition}");
         }
@@ -507,10 +516,6 @@ public class KartController : NetworkBehaviour
             SwitchCamera();
         }
     }
-    
-    /// <summary>
-    /// Initializes the driving cameras after checking if intro is playing
-    /// </summary>
     private System.Collections.IEnumerator InitializeCamerasAfterIntroCheck()
     {
         // Wait a frame to ensure GameManager is initialized
@@ -525,22 +530,18 @@ public class KartController : NetworkBehaviour
         {
             savedBackCameraPriority = drivingCameraBack.Priority;
         }
-        
-        // Ensure cameras are disabled and have low priority initially
         if (drivingCameraFront != null)
         {
-            drivingCameraFront.Priority = 0; // Set to lowest priority
+            drivingCameraFront.Priority = 0;
             drivingCameraFront.gameObject.SetActive(false);
             drivingCameraFront.enabled = false;
         }
         if (drivingCameraBack != null)
         {
-            drivingCameraBack.Priority = 0; // Set to lowest priority
+            drivingCameraBack.Priority = 0; 
             drivingCameraBack.gameObject.SetActive(false);
             drivingCameraBack.enabled = false;
         }
-        
-        // Check if intro is playing
         bool isIntroPlaying = false;
         if (GameManager.Instance != null)
         {
@@ -552,7 +553,6 @@ public class KartController : NetworkBehaviour
         {
             while (GameManager.Instance != null && GameManager.Instance.IsPlayingIntro())
             {
-                // Keep cameras disabled during intro
                 if (drivingCameraFront != null)
                 {
                     drivingCameraFront.Priority = 0;
@@ -567,30 +567,19 @@ public class KartController : NetworkBehaviour
                 }
                 yield return new WaitForSeconds(0.1f);
             }
-            // Wait a bit more to ensure intro cameras are disabled
             yield return new WaitForSeconds(0.2f);
         }
-        
-        // Now initialize cameras
         InitializeDrivingCameras();
     }
-    
-    /// <summary>
-    /// Initializes the driving cameras - sets front camera as active by default
-    /// </summary>
     private void InitializeDrivingCameras()
     {
         isFrontCamera = true;
         camerasInitialized = true;
-        
-        // Disable back camera and restore its priority
         if (drivingCameraBack != null)
         {
             drivingCameraBack.Priority = savedBackCameraPriority;
             drivingCameraBack.gameObject.SetActive(false);
         }
-        
-        // Enable front camera and restore its priority
         if (drivingCameraFront != null)
         {
             drivingCameraFront.Priority = savedFrontCameraPriority;
@@ -600,7 +589,6 @@ public class KartController : NetworkBehaviour
         }
         else if (drivingCameraBack != null)
         {
-            // Fallback: if front camera is not set, use back camera
             drivingCameraBack.Priority = savedBackCameraPriority;
             drivingCameraBack.gameObject.SetActive(true);
             drivingCameraBack.enabled = true;
@@ -608,11 +596,6 @@ public class KartController : NetworkBehaviour
             Debug.Log($"[KartController] Front camera not set, using back camera as fallback (Priority: {savedBackCameraPriority})");
         }
     }
-    
-    /// <summary>
-    /// Gets the currently active driving camera (front or back)
-    /// Returns null if intro is playing or cameras are not initialized
-    /// </summary>
     public CinemachineCamera GetActiveDrivingCamera()
     {
         // Don't return camera if intro is playing or cameras are not initialized
@@ -689,7 +672,8 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         
-        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        // Search in parent as well
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             playerInput.enabled = true;
@@ -726,12 +710,8 @@ public class KartController : NetworkBehaviour
         }
     }
     
-    /// <summary>
-    /// Called when hit by Shell/projectile (called from server)
-    /// </summary>
     public void OnHitByProjectile(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
-        // Check if this is an AI kart - check on self, parent, and root
         bool isAI = GetComponent<AIKartController>() != null || 
                     GetComponentInParent<AIKartController>() != null ||
                     transform.root.GetComponent<AIKartController>() != null;
@@ -740,7 +720,6 @@ public class KartController : NetworkBehaviour
         
         if (isAI)
         {
-            // AI: Apply effect directly on server (must be on server)
             if (IsServer)
             {
                 ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
@@ -756,10 +735,7 @@ public class KartController : NetworkBehaviour
             ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
         }
     }
-    
-    /// <summary>
-    /// Apply hit effect directly on server (for AI karts)
-    /// </summary>
+   
     private void ApplyHitEffectOnServer(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
         if (!IsServer)
@@ -769,8 +745,6 @@ public class KartController : NetworkBehaviour
         }
         
         Debug.Log($"[KartController] Applying hit effect to AI {gameObject.name} on server! force: {force}, direction: {hitDirection}");
-        
-        // Find Rigidbody - check self, parent, and root
         Rigidbody kartRb = GetComponent<Rigidbody>();
         if (kartRb == null)
         {
@@ -783,7 +757,6 @@ public class KartController : NetworkBehaviour
         if (kartRb == null)
         {
             Debug.LogError($"[KartController] Could not find Rigidbody on AI {gameObject.name} (checked self, parent, root)!");
-            // Still apply stun even if no Rigidbody found
         }
         else
         {
@@ -800,10 +773,12 @@ public class KartController : NetworkBehaviour
     [ClientRpc]
     private void ApplyProjectileHitClientRpc(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
+        Debug.Log($"[KartController] RPC Hit received on {gameObject.name}. IsOwner: {IsOwner}. Force: {force}");
+
         // Only owner executes physics effect (for player karts)
         if (!IsOwner) return;
         
-        Debug.Log($"[KartController] Player {gameObject.name} hit by projectile! IsOwner: {IsOwner}, force: {force}");
+        Debug.Log($"[KartController] Applying hit physics locally on Owner!");
         
         Rigidbody kartRb = GetComponent<Rigidbody>();
         if (kartRb != null)
@@ -837,7 +812,8 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         
-        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        // Search in parent as well
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             if (!playerInput.enabled)

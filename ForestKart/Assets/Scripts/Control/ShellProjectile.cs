@@ -1,10 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
 using System.Collections;
-
-/// <summary>
-/// Shell projectile - flies forward and hits players
-/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class ShellProjectile : NetworkBehaviour
 {
@@ -137,42 +133,7 @@ public class ShellProjectile : NetworkBehaviour
             KartController kart = FindKartController(col);
             if (kart != null)
             {
-                bool isOwnerKart = false;
-                if (ownerTransform != null)
-                {
-                    Transform kartRoot = kart.transform.root;
-                    Transform ownerRoot = ownerTransform.root;
-                    
-                    if (kartRoot == ownerRoot || kart.transform == ownerTransform || 
-                        kart.transform.IsChildOf(ownerTransform) || ownerTransform.IsChildOf(kart.transform))
-                    {
-                        isOwnerKart = true;
-                    }
-                    
-                    if (!isOwnerKart)
-                    {
-                        NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
-                        if (kartNetObj == null) kartNetObj = kart.GetComponentInParent<NetworkObject>();
-                        NetworkObject ownerNetObj = ownerTransform.GetComponent<NetworkObject>();
-                        if (ownerNetObj == null) ownerNetObj = ownerTransform.GetComponentInParent<NetworkObject>();
-                        
-                        if (kartNetObj != null && ownerNetObj != null && kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
-                        {
-                            isOwnerKart = true;
-                        }
-                    }
-                }
-                
-                if (!isOwnerKart)
-                {
-                    float distance = Vector3.Distance(transform.position, kart.transform.position);
-                    if (distance < detectionRadius)
-                    {
-                        Debug.Log($"[ShellProjectile] Detected nearby kart via OverlapSphere: {kart.gameObject.name}, distance: {distance}");
-                        HitKart(kart);
-                        return;
-                    }
-                }
+                ProcessHit(kart);
             }
         }
     }
@@ -182,8 +143,6 @@ public class ShellProjectile : NetworkBehaviour
         if (!IsServer) return;
         if (hasHit) return;
         
-        Debug.Log($"[ShellProjectile] Trigger entered with: {other.gameObject.name}, layer: {other.gameObject.layer}");
-        
         HandleCollision(other);
     }
     
@@ -192,10 +151,7 @@ public class ShellProjectile : NetworkBehaviour
         if (!IsServer) return;
         if (hasHit) return;
         
-        Collider other = collision.collider;
-        Debug.Log($"[ShellProjectile] Collision with: {other.gameObject.name}");
-        
-        HandleCollision(other);
+        HandleCollision(collision.collider);
     }
     
     private void HandleCollision(Collider other)
@@ -207,53 +163,12 @@ public class ShellProjectile : NetworkBehaviour
             return;
         }
         
-        if (other.CompareTag("Player"))
-        {
-            Debug.Log($"[ShellProjectile] Detected Player tag collider: {other.gameObject.name}");
-        }
-        
         KartController kart = FindKartController(other);
         
         if (kart != null)
         {
-            bool isOwnerKart = false;
-            
-            if (ownerTransform != null)
-            {
-                Transform kartRoot = kart.transform.root;
-                Transform ownerRoot = ownerTransform.root;
-                if (kartRoot == ownerRoot)
-                {
-                    isOwnerKart = true;
-                }
-                
-                if (!isOwnerKart && (kart.transform == ownerTransform || kart.transform.IsChildOf(ownerTransform) || ownerTransform.IsChildOf(kart.transform)))
-                {
-                    isOwnerKart = true;
-                }
-                
-                NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
-                if (kartNetObj == null) kartNetObj = kart.GetComponentInParent<NetworkObject>();
-                NetworkObject ownerNetObj = ownerTransform.GetComponent<NetworkObject>();
-                if (ownerNetObj == null) ownerNetObj = ownerTransform.GetComponentInParent<NetworkObject>();
-                
-                if (!isOwnerKart && kartNetObj != null && ownerNetObj != null && kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
-                {
-                    isOwnerKart = true;
-                }
-            }
-            
-            if (!isOwnerKart)
-            {
-                Debug.Log($"[ShellProjectile] Hit kart: {kart.gameObject.name}, ownerTransform: {(ownerTransform != null ? ownerTransform.name : "null")}");
-                HitKart(kart);
-                return;
-            }
-            else
-            {
-                Debug.Log($"[ShellProjectile] Ignored own kart: {kart.gameObject.name}");
-                return;
-            }
+            ProcessHit(kart);
+            return;
         }
         
         if (other.gameObject.layer == LayerMask.NameToLayer("Default") || 
@@ -264,89 +179,78 @@ public class ShellProjectile : NetworkBehaviour
         }
     }
     
+    private void ProcessHit(KartController kart)
+    {
+        if (hasHit) return;
+
+        bool isOwnerKart = false;
+        
+        if (ownerTransform != null)
+        {
+            Transform kartRoot = kart.transform.root;
+            Transform ownerRoot = ownerTransform.root;
+            
+            // 1. Instance check (Prevent hitting self instance)
+            if (kartRoot == ownerRoot || kart.transform == ownerTransform || 
+                kart.transform.IsChildOf(ownerTransform) || ownerTransform.IsChildOf(kart.transform))
+            {
+                isOwnerKart = true;
+            }
+            if (!isOwnerKart)
+            {
+                NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
+                if (kartNetObj == null) kartNetObj = kart.GetComponentInParent<NetworkObject>();
+                NetworkObject ownerNetObj = ownerTransform.GetComponent<NetworkObject>();
+                if (ownerNetObj == null) ownerNetObj = ownerTransform.GetComponentInParent<NetworkObject>();
+                
+                if (kartNetObj != null && ownerNetObj != null && kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
+                {
+                    if (ownerNetObj.OwnerClientId != NetworkManager.ServerClientId)
+                    {
+                        isOwnerKart = true;
+                    }
+                }
+                Debug.Log($"[ShellProjectile] Check Hit {kart.name}. OwnerID: {ownerNetObj?.OwnerClientId}, TargetID: {kartNetObj?.OwnerClientId}. ServerID: {NetworkManager.ServerClientId}. IsOwnerKart: {isOwnerKart}");
+            }
+        }
+        
+        if (!isOwnerKart)
+        {
+            HitKart(kart);
+        }
+    }
+    
     private KartController FindKartController(Collider collider)
     {
         KartController kart = collider.GetComponent<KartController>();
-        if (kart != null) 
-        {
-            Debug.Log($"[ShellProjectile] Found KartController on collider: {collider.gameObject.name}");
-            return kart;
-        }
+        if (kart != null) return kart;
         
         kart = collider.GetComponentInParent<KartController>();
-        if (kart != null)
-        {
-            Debug.Log($"[ShellProjectile] Found KartController in parent of: {collider.gameObject.name}");
-            return kart;
-        }
+        if (kart != null) return kart;
         
         Transform root = collider.transform.root;
         kart = root.GetComponent<KartController>();
-        if (kart != null)
-        {
-            Debug.Log($"[ShellProjectile] Found KartController in root: {root.name}");
-            return kart;
-        }
+        if (kart != null) return kart;
         
         Rigidbody otherRb = collider.attachedRigidbody;
-        if (otherRb == null)
-        {
-            otherRb = collider.GetComponentInParent<Rigidbody>();
-        }
-        if (otherRb == null)
-        {
-            root = collider.transform.root;
-            otherRb = root.GetComponent<Rigidbody>();
-        }
+        if (otherRb == null) otherRb = collider.GetComponentInParent<Rigidbody>();
+        if (otherRb == null) otherRb = collider.transform.root.GetComponent<Rigidbody>();
         
         if (otherRb != null)
         {
-            Debug.Log($"[ShellProjectile] Found Rigidbody: {otherRb.gameObject.name}");
-            
             kart = otherRb.GetComponent<KartController>();
-            if (kart != null)
-            {
-                Debug.Log($"[ShellProjectile] Found KartController on Rigidbody object: {otherRb.gameObject.name}");
-                return kart;
-            }
-            
+            if (kart != null) return kart;
             kart = otherRb.GetComponentInChildren<KartController>();
-            if (kart != null)
-            {
-                Debug.Log($"[ShellProjectile] Found KartController in children of Rigidbody: {otherRb.gameObject.name}");
-                return kart;
-            }
-            
-            if (otherRb.transform.parent != null)
-            {
-                kart = otherRb.transform.parent.GetComponentInParent<KartController>();
-                if (kart != null)
-                {
-                    Debug.Log($"[ShellProjectile] Found KartController in parent of Rigidbody: {otherRb.gameObject.name}");
-                    return kart;
-                }
-            }
+            if (kart != null) return kart;
+            if (otherRb.transform.parent != null) kart = otherRb.transform.parent.GetComponentInParent<KartController>();
+            if (kart != null) return kart;
         }
         
         AIKartController aiController = collider.GetComponentInParent<AIKartController>();
-        if (aiController == null)
-        {
-            root = collider.transform.root;
-            aiController = root.GetComponent<AIKartController>();
-        }
-        if (aiController != null)
-        {
-            Debug.Log($"[ShellProjectile] Found AIKartController: {aiController.gameObject.name}");
-            kart = aiController.GetComponent<KartController>();
-            if (kart != null)
-            {
-                Debug.Log($"[ShellProjectile] Found KartController from AIKartController: {aiController.gameObject.name}");
-                return kart;
-            }
-        }
+        if (aiController == null) aiController = collider.transform.root.GetComponent<AIKartController>();
+        if (aiController != null) kart = aiController.GetComponent<KartController>();
         
-        Debug.LogWarning($"[ShellProjectile] Could not find KartController for collider: {collider.gameObject.name}");
-        return null;
+        return kart;
     }
     
     private void HitKart(KartController kart)
@@ -354,19 +258,11 @@ public class ShellProjectile : NetworkBehaviour
         if (hasHit) return;
         hasHit = true;
         
-        // Check if this is an AI kart before hitting
-        bool isAI = kart.GetComponent<AIKartController>() != null || 
-                    kart.GetComponentInParent<AIKartController>() != null ||
-                    kart.transform.root.GetComponent<AIKartController>() != null;
-        
-        Debug.Log($"[ShellProjectile] Hitting kart: {kart.gameObject.name}, isAI: {isAI}, IsServer: {IsServer}");
+        Debug.Log($"[ShellProjectile] CONFIRMED HIT on {kart.gameObject.name}!");
         
         Vector3 hitDirection = (kart.transform.position - transform.position);
         float distance = hitDirection.magnitude;
-        if (distance < 0.1f)
-        {
-            hitDirection = transform.forward;
-        }
+        if (distance < 0.1f) hitDirection = transform.forward;
         hitDirection.Normalize();
         hitDirection.y = Mathf.Max(0.2f, hitDirection.y);
         hitDirection.Normalize();
@@ -374,7 +270,6 @@ public class ShellProjectile : NetworkBehaviour
         float actualForce = hitForce * 1.5f;
         float torqueAmount = Random.Range(500f, 1500f);
         
-        Debug.Log($"[ShellProjectile] Calling OnHitByProjectile on {kart.gameObject.name} with force: {actualForce}");
         kart.OnHitByProjectile(hitDirection, actualForce, torqueAmount, stunDuration);
         
         HitKartClientRpc();
@@ -382,12 +277,9 @@ public class ShellProjectile : NetworkBehaviour
         DestroyShell();
     }
     
-    
     [ClientRpc]
     private void HitKartClientRpc()
     {
-        // Play explosion effect if available
-        // TODO: Add effects
     }
     
     private void DestroyShell()
