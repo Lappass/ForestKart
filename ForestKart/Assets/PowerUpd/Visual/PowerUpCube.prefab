@@ -432,7 +432,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8831909646801218878}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -534,5 +534,5 @@ MonoBehaviour:
   rotationSpeed: 90
   floatSpeed: 2
   floatAmount: 0.3
-  cubeVisual: {fileID: 0}
+  cubeVisual: {fileID: 4481417448330719221}
   collectEffectPrefab: {fileID: 0}

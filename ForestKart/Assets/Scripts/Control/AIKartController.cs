@@ -64,9 +64,18 @@ public class AIKartController : NetworkBehaviour
     public float overtakingDuration = 4f;
     
     public float aggressiveOvertakingDistance = 5f;
+
+    [Header("Power Ups")]
+    public bool enablePowerUps = true;
+    [Tooltip("Probability per second to use power up when available")]
+    [Range(0f, 1f)]
+    public float usePowerUpChance = 0.3f;
+    [Tooltip("Minimum time to hold a power up before using")]
+    public float minPowerUpHoldTime = 1.0f;
     
     private KartController kartController;
     private Rigidbody rb;
+    private PowerUpSystem powerUpSystem;
     private float currentSplinePosition = 0f;
     private float currentSpeed = 0f;
     private float splineLength = 0f;
@@ -91,6 +100,7 @@ public class AIKartController : NetworkBehaviour
     private float speedChangeTimer = 0f;
     private float lateralChangeTimer = 0f;
     private bool hasPassedMidpoint = false; // Prevent lap count jitter at start
+    private float powerUpHoldTimer = 0f;
     
     // Obstacle avoidance state
     private float baseTargetSpeed = 0f;
@@ -100,6 +110,7 @@ public class AIKartController : NetworkBehaviour
     {
         kartController = GetComponent<KartController>();
         rb = GetComponent<Rigidbody>();
+        powerUpSystem = GetComponent<PowerUpSystem>();
         
         FindSplinePath();
         CalculateSpeedParameters();
@@ -307,7 +318,35 @@ public class AIKartController : NetworkBehaviour
         }
         
         UpdateAILogic();
+        if (enablePowerUps)
+        {
+            UpdatePowerUpLogic();
+        }
         ApplyControls();
+    }
+    
+    private void UpdatePowerUpLogic()
+    {
+        if (powerUpSystem == null) return;
+        
+        if (powerUpSystem.HasPowerUp())
+        {
+            powerUpHoldTimer += Time.deltaTime;
+            
+            if (powerUpHoldTimer >= minPowerUpHoldTime)
+            {
+                // Random chance to use power up
+                if (UnityEngine.Random.value < usePowerUpChance * Time.deltaTime)
+                {
+                    powerUpSystem.UsePowerUp();
+                    powerUpHoldTimer = 0f;
+                }
+            }
+        }
+        else
+        {
+            powerUpHoldTimer = 0f;
+        }
     }
     
     private void UpdateAILogic()

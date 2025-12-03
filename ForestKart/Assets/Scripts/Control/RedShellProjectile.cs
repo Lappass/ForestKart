@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using Unity.Mathematics;
 using System.Collections;
 [RequireComponent(typeof(Rigidbody))]
 public class RedShellProjectile : NetworkBehaviour
@@ -15,6 +16,8 @@ public class RedShellProjectile : NetworkBehaviour
     private float trackingStrength = 3f;
     private float updateTargetInterval = 0.5f;
     private float lastTargetUpdate = 0f;
+    private float ignoreOwnerTime = 0.5f; 
+    private float spawnTime = 0f;
     
     private Collider shellCollider;
     
@@ -54,6 +57,37 @@ public class RedShellProjectile : NetworkBehaviour
         hitForce = force;
         stunDuration = stun;
         trackingRange = range;
+        spawnTime = Time.time;
+
+        if (owner != null && shellCollider != null)
+        {
+            Collider[] ownerColliders = owner.GetComponentsInChildren<Collider>();
+            foreach (var ownerCollider in ownerColliders)
+            {
+                if (ownerCollider != null && ownerCollider != shellCollider)
+                {
+                    Physics.IgnoreCollision(shellCollider, ownerCollider, true);
+                }
+            }
+
+            StartCoroutine(ReenableCollisionWithOwner(ownerColliders));
+        }
+    }
+    
+    private System.Collections.IEnumerator ReenableCollisionWithOwner(Collider[] ownerColliders)
+    {
+        yield return new WaitForSeconds(ignoreOwnerTime);
+        
+        if (shellCollider != null && ownerColliders != null)
+        {
+            foreach (var ownerCollider in ownerColliders)
+            {
+                if (ownerCollider != null && ownerCollider != shellCollider)
+                {
+                    Physics.IgnoreCollision(shellCollider, ownerCollider, false);
+                }
+            }
+        }
     }
     
     private void InitializeVelocity()
@@ -68,9 +102,9 @@ public class RedShellProjectile : NetworkBehaviour
         rb.linearVelocity = direction * speed;
         
         rb.angularVelocity = new Vector3(
-            Random.Range(-5f, 5f),
-            Random.Range(-10f, 10f),
-            Random.Range(-5f, 5f)
+            UnityEngine.Random.Range(-5f, 5f),
+            UnityEngine.Random.Range(-10f, 10f),
+            UnityEngine.Random.Range(-5f, 5f)
         );
         
         Debug.Log($"[RedShellProjectile] Initialized velocity: {rb.linearVelocity}");
@@ -114,32 +148,107 @@ public class RedShellProjectile : NetworkBehaviour
         }
         
         CheckForNearbyKarts();
-        
+
         if (targetTransform != null && targetTransform.gameObject.activeInHierarchy)
         {
             Vector3 directionToTarget = (targetTransform.position - transform.position).normalized;
-            directionToTarget.y = 0;
+            directionToTarget.y = 0; 
             
-            Vector3 currentVelocity = rb.linearVelocity.normalized;
-            Vector3 desiredVelocity = Vector3.Slerp(currentVelocity, directionToTarget, Time.fixedDeltaTime * trackingStrength) * speed;
-            rb.linearVelocity = desiredVelocity;
-            
-            if (directionToTarget.magnitude > 0.1f)
+            Vector3 desiredDir = directionToTarget;
+            bool usingSpline = false;
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
             {
-                Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                    float t;
+                    float3 nearest;
+                    float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, transform.position, out nearest, out t);
+                    
+                    if (dSq < 225f)
+                    {
+                        usingSpline = true;
+                        Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+
+                        Vector3 currentForward = transform.forward;
+                        currentForward.y = 0;
+                        if (Vector3.Dot(splineTangent, currentForward) < 0) splineTangent = -splineTangent;
+                        splineTangent.y = 0;
+                        splineTangent.Normalize();
+                        
+                        desiredDir = (splineTangent * 0.7f + directionToTarget * 0.3f).normalized;
+                    }
+                }
+            }
+            
+            Vector3 currentVelocity = rb.linearVelocity;
+            currentVelocity.y = 0;
+            Vector3 desiredVelocity = Vector3.Slerp(currentVelocity.normalized, desiredDir, Time.fixedDeltaTime * trackingStrength) * speed;
+            desiredVelocity.y = rb.linearVelocity.y; 
+            if (!Physics.Raycast(transform.position, Vector3.down, 1.0f))
+            {
+                 desiredVelocity.y -= 9.8f * Time.fixedDeltaTime;
+            }
+            
+            rb.linearVelocity = desiredVelocity;
+            if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 2.0f))
+            {
+                desiredDir = Vector3.ProjectOnPlane(desiredDir, hit.normal).normalized;
+            }
+            
+            if (desiredDir.magnitude > 0.1f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(desiredDir);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * trackingStrength);
             }
         }
         else
         {
-            if (rb.linearVelocity.magnitude < speed * 0.5f)
+            bool followingSpline = false;
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
             {
-                Vector3 direction = rb.linearVelocity.normalized;
-                if (direction.magnitude < 0.1f)
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
                 {
-                    direction = transform.forward;
+                    float t;
+                    float3 nearest;
+                    float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, transform.position, out nearest, out t);
+                    if (dSq < 100f)
+                    {
+                        followingSpline = true;
+                        Vector3 tangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                        if (Vector3.Dot(tangent, transform.forward) < 0) tangent = -tangent;
+                        
+                        Vector3 desiredDir = tangent.normalized;
+                        // Project to ground
+                        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 2.0f))
+                        {
+                            desiredDir = Vector3.ProjectOnPlane(desiredDir, hit.normal).normalized;
+                        }
+                        Vector3 currentDir = rb.linearVelocity.normalized;
+                        currentDir.y = 0;
+                        desiredDir = Vector3.Slerp(currentDir, desiredDir, Time.fixedDeltaTime * 10f).normalized;
+                        
+                        rb.linearVelocity = desiredDir * speed + Vector3.up * rb.linearVelocity.y;
+                        
+                        if (desiredDir.magnitude > 0.1f)
+                        {
+                            Quaternion targetRotation = Quaternion.LookRotation(desiredDir);
+                            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * 10f);
+                        }
+                    }
                 }
-                rb.linearVelocity = direction * speed;
+            }
+            
+            // 3. Fallback: Simple forward movement
+            if (!followingSpline)
+            {
+                Vector3 forward = transform.forward;
+                if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 2.0f))
+                {
+                    forward = Vector3.ProjectOnPlane(transform.forward, hit.normal).normalized;
+                }
+                rb.linearVelocity = forward * speed + Vector3.up * rb.linearVelocity.y;
             }
         }
     }
@@ -177,7 +286,6 @@ public class RedShellProjectile : NetworkBehaviour
         
         foreach (var kart in allKarts)
         {
-            // Skip self instance
             if (ownerTransform != null && (kart.transform == ownerTransform || kart.transform.IsChildOf(ownerTransform)))
             {
                 continue;
@@ -185,11 +293,8 @@ public class RedShellProjectile : NetworkBehaviour
             
             NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
             if (kartNetObj == null) kartNetObj = kart.GetComponentInParent<NetworkObject>();
-            
-            // Skip by ClientId
             if (kartNetObj != null && kartNetObj.OwnerClientId == ownerClientId)
             {
-                // Fix: Allow finding targets if owner is Server (Host vs AI or AI vs AI)
                 if (ownerClientId != NetworkManager.ServerClientId)
                 {
                     continue;
@@ -245,6 +350,18 @@ public class RedShellProjectile : NetworkBehaviour
                 continue;
             }
             
+            // Ignore owner during spawn grace period
+            if (Time.time - spawnTime < ignoreOwnerTime)
+            {
+                if (col.transform == ownerTransform || 
+                    col.transform.IsChildOf(ownerTransform) || 
+                    ownerTransform.IsChildOf(col.transform) ||
+                    col.transform.root == ownerTransform.root)
+                {
+                    continue;
+                }
+            }
+            
             KartController kart = FindKartController(col);
             if (kart != null)
             {
@@ -278,6 +395,17 @@ public class RedShellProjectile : NetworkBehaviour
             return;
         }
         
+        if (ownerTransform != null && Time.time - spawnTime < ignoreOwnerTime)
+        {
+            if (other.transform == ownerTransform || 
+                other.transform.IsChildOf(ownerTransform) || 
+                ownerTransform.IsChildOf(other.transform) ||
+                other.transform.root == ownerTransform.root)
+            {
+                return;
+            }
+        }
+        
         KartController kart = FindKartController(other);
         
         if (kart != null)
@@ -304,15 +432,11 @@ public class RedShellProjectile : NetworkBehaviour
         {
             Transform kartRoot = kart.transform.root;
             Transform ownerRoot = ownerTransform.root;
-            
-            // 1. Instance check
             if (kartRoot == ownerRoot || kart.transform == ownerTransform || 
                 kart.transform.IsChildOf(ownerTransform) || ownerTransform.IsChildOf(kart.transform))
             {
                 isOwnerKart = true;
             }
-            
-            // 2. OwnerClientId check
             if (!isOwnerKart)
             {
                 NetworkObject kartNetObj = kart.GetComponent<NetworkObject>();
@@ -322,7 +446,6 @@ public class RedShellProjectile : NetworkBehaviour
                 
                 if (kartNetObj != null && ownerNetObj != null && kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
                 {
-                    // If owner is Server, allow hitting (Host vs AI, AI vs Host, AI vs AI)
                     if (ownerNetObj.OwnerClientId != NetworkManager.ServerClientId)
                     {
                         isOwnerKart = true;
@@ -387,7 +510,7 @@ public class RedShellProjectile : NetworkBehaviour
         hitDirection.Normalize();
         
         float actualForce = hitForce * 1.5f;
-        float torqueAmount = Random.Range(500f, 1500f);
+        float torqueAmount = UnityEngine.Random.Range(500f, 1500f);
         
         kart.OnHitByProjectile(hitDirection, actualForce, torqueAmount, stunDuration);
         

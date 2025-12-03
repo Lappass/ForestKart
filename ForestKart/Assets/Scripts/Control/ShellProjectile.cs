@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using Unity.Mathematics;
 using System.Collections;
 [RequireComponent(typeof(Rigidbody))]
 public class ShellProjectile : NetworkBehaviour
@@ -10,6 +11,8 @@ public class ShellProjectile : NetworkBehaviour
     private float hitForce = 3000f;
     private float stunDuration = 2f;
     private bool hasHit = false;
+    private float ignoreOwnerTime = 0.5f; 
+    private float spawnTime = 0f;
     
     private Collider shellCollider;
     
@@ -49,6 +52,36 @@ public class ShellProjectile : NetworkBehaviour
         speed = shellSpeed;
         hitForce = force;
         stunDuration = stun;
+        spawnTime = Time.time;
+        if (owner != null && shellCollider != null)
+        {
+            Collider[] ownerColliders = owner.GetComponentsInChildren<Collider>();
+            foreach (var ownerCollider in ownerColliders)
+            {
+                if (ownerCollider != null && ownerCollider != shellCollider)
+                {
+                    Physics.IgnoreCollision(shellCollider, ownerCollider, true);
+                }
+            }
+
+            StartCoroutine(ReenableCollisionWithOwner(ownerColliders));
+        }
+    }
+    
+    private System.Collections.IEnumerator ReenableCollisionWithOwner(Collider[] ownerColliders)
+    {
+        yield return new WaitForSeconds(ignoreOwnerTime);
+        
+        if (shellCollider != null && ownerColliders != null)
+        {
+            foreach (var ownerCollider in ownerColliders)
+            {
+                if (ownerCollider != null && ownerCollider != shellCollider)
+                {
+                    Physics.IgnoreCollision(shellCollider, ownerCollider, false);
+                }
+            }
+        }
     }
     
     private void InitializeVelocity()
@@ -59,9 +92,9 @@ public class ShellProjectile : NetworkBehaviour
         rb.linearVelocity = direction * speed;
         
         rb.angularVelocity = new Vector3(
-            Random.Range(-5f, 5f),
-            Random.Range(-10f, 10f),
-            Random.Range(-5f, 5f)
+            UnityEngine.Random.Range(-5f, 5f),
+            UnityEngine.Random.Range(-10f, 10f),
+            UnityEngine.Random.Range(-5f, 5f)
         );
         
         Debug.Log($"[ShellProjectile] Initialized velocity: {rb.linearVelocity}, speed: {speed}, direction: {direction}");
@@ -102,17 +135,55 @@ public class ShellProjectile : NetworkBehaviour
         if (!IsServer) return;
         if (hasHit) return;
         
-        if (rb.linearVelocity.magnitude < speed * 0.5f)
+        CheckForNearbyKarts();
+        bool followingSpline = false;
+        Vector3 moveDir = transform.forward;
+        
+        if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
         {
-            Vector3 direction = rb.linearVelocity.normalized;
-            if (direction.magnitude < 0.1f)
+            var spline = GameManager.Instance.raceTrack;
+            using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
             {
-                direction = transform.forward;
+                float t;
+                Unity.Mathematics.float3 nearest;
+                float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, transform.position, out nearest, out t);
+                if (dSq < 225f)
+                {
+                    followingSpline = true;
+                    Vector3 tangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                    Vector3 currentForward = transform.forward;
+                    currentForward.y = 0;
+                    if (Vector3.Dot(tangent, currentForward) < 0) tangent = -tangent;
+                    moveDir = Vector3.Slerp(currentForward.normalized, tangent.normalized, Time.fixedDeltaTime * 20f).normalized;
+                    if (dSq < 25f)
+                    {
+                        moveDir = tangent.normalized;
+                    }
+                }
             }
-            rb.linearVelocity = direction * speed;
         }
         
-        CheckForNearbyKarts();
+        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit hit, 2.0f))
+        {
+            moveDir = Vector3.ProjectOnPlane(moveDir, hit.normal).normalized;
+        }
+        else
+        {
+            rb.AddForce(Vector3.down * 20f, ForceMode.Acceleration);
+        }
+
+        Vector3 newVel = moveDir * speed;
+        if (!Physics.Raycast(transform.position, Vector3.down, 0.5f))
+        {
+             newVel.y = rb.linearVelocity.y;
+        }
+        
+        rb.linearVelocity = newVel;
+        if (moveDir.magnitude > 0.1f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveDir);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * 15f);
+        }
     }
     
     private void CheckForNearbyKarts()
@@ -128,6 +199,16 @@ public class ShellProjectile : NetworkBehaviour
             if (col.transform == transform || col.transform.IsChildOf(transform))
             {
                 continue;
+            }
+            if (Time.time - spawnTime < ignoreOwnerTime)
+            {
+                if (col.transform == ownerTransform || 
+                    col.transform.IsChildOf(ownerTransform) || 
+                    ownerTransform.IsChildOf(col.transform) ||
+                    col.transform.root == ownerTransform.root)
+                {
+                    continue;
+                }
             }
             
             KartController kart = FindKartController(col);
@@ -162,6 +243,16 @@ public class ShellProjectile : NetworkBehaviour
         {
             return;
         }
+        if (ownerTransform != null && Time.time - spawnTime < ignoreOwnerTime)
+        {
+            if (other.transform == ownerTransform || 
+                other.transform.IsChildOf(ownerTransform) || 
+                ownerTransform.IsChildOf(other.transform) ||
+                other.transform.root == ownerTransform.root)
+            {
+                return;
+            }
+        }
         
         KartController kart = FindKartController(other);
         
@@ -189,8 +280,6 @@ public class ShellProjectile : NetworkBehaviour
         {
             Transform kartRoot = kart.transform.root;
             Transform ownerRoot = ownerTransform.root;
-            
-            // 1. Instance check (Prevent hitting self instance)
             if (kartRoot == ownerRoot || kart.transform == ownerTransform || 
                 kart.transform.IsChildOf(ownerTransform) || ownerTransform.IsChildOf(kart.transform))
             {
@@ -268,7 +357,7 @@ public class ShellProjectile : NetworkBehaviour
         hitDirection.Normalize();
         
         float actualForce = hitForce * 1.5f;
-        float torqueAmount = Random.Range(500f, 1500f);
+        float torqueAmount = UnityEngine.Random.Range(500f, 1500f);
         
         kart.OnHitByProjectile(hitDirection, actualForce, torqueAmount, stunDuration);
         

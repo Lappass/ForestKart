@@ -7,6 +7,8 @@ using UnityEngine.UI;
 using UnityEngine.Rendering.Universal;
 using Unity.Netcode;
 using Unity.Cinemachine;
+using UnityEngine.Splines;
+using Unity.Mathematics;
 
 public class KartController : NetworkBehaviour
 {
@@ -44,6 +46,34 @@ public class KartController : NetworkBehaviour
     [Header("Spline Speed Penalty")]
     [Tooltip("Enable speed penalty when not on spline")]
     public bool enableSplineSpeedPenalty = true;
+
+    [Header("Respawn Settings")]
+    [Tooltip("Enable automatic respawn when off-track")]
+    public bool enableRespawn = true;
+    [Tooltip("Time in seconds off-track before respawn")]
+    public float respawnDelay = 3f;
+    [Tooltip("Y position threshold below which immediate respawn occurs")]
+    public float fallRespawnY = -10f;
+    [Tooltip("How far back in time (seconds) to respawn when resetting")]
+    public float respawnBacktrackTime = 2.0f;
+    
+    private struct PositionSnapshot
+    {
+        public Vector3 position;
+        public Quaternion rotation;
+        public float timestamp;
+    }
+    
+    private List<PositionSnapshot> validPositionHistory = new List<PositionSnapshot>();
+    private float snapshotInterval = 0.2f; // Take a snapshot every 0.2s
+    private float lastSnapshotTime = 0f;
+    private float offTrackTimer = 0f;
+    private float respawnGracePeriod = 0f; // Grace period after respawn to avoid immediate re-respawn
+
+    // Inputs
+    private float inputGas = 0f;
+    private bool inputBrake = false;
+    private bool isAI = false;
     
     [Tooltip("Layer mask for detecting spline. If set to Nothing, no speed penalty will be applied")]
     public LayerMask splineLayer = 1 << 0; // Default layer
@@ -133,6 +163,16 @@ public class KartController : NetworkBehaviour
         
         originalDriveTorque = DriveTorque;
         originalMaxSpeed = maxSpeed;
+        
+        isAI = GetComponent<AIKartController>() != null || GetComponentInParent<AIKartController>() != null;
+
+        // Initial snapshot
+        validPositionHistory.Add(new PositionSnapshot 
+        { 
+            position = transform.position, 
+            rotation = transform.rotation, 
+            timestamp = Time.time 
+        });
         
         // Initialize wheel mesh rotation offsets
         if (driveWheels != null && driveWheelMeshes != null)
@@ -695,10 +735,72 @@ public class KartController : NetworkBehaviour
             UpdateSplineSpeedPenalty();
         }
         
+        if (enableRespawn)
+        {
+            UpdateRespawnLogic();
+        }
+        
+        if (!isAI && controlsEnabled)
+        {
+            UpdatePlayerControls();
+        }
+
         Drive(gas, brake,steer,drift);
         AddDownForce();
     }
     
+    private void UpdatePlayerControls()
+    {
+        // Auto-reverse logic:
+        // If holding brake:
+        // - If moving forward > threshold: Brake
+        // - If stopped or moving backward: Reverse (and treat brake as gas)
+        
+        if (inputBrake)
+        {
+            // Check local forward speed
+            float forwardSpeed = transform.InverseTransformDirection(rb.linearVelocity).z;
+            
+            if (forwardSpeed > 1.0f) // Moving forward: Brake
+            {
+                brake = 1f;
+                reverse = false;
+                gas = inputGas; 
+            }
+            else // Stopped or Reversing: Reverse
+            {
+                brake = 0f;
+                reverse = true;
+                // Use brake button as throttle for reverse
+                gas = 1f; 
+            }
+        }
+        else
+        {
+            brake = 0f;
+            reverse = false;
+            gas = inputGas;
+        }
+        
+        // Visuals
+        if (taillight != null)
+        {
+            if (inputBrake)
+                taillight.GetComponent<Renderer>().material.EnableKeyword("_EMISSION");
+            else
+                taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
+        }
+        
+        // Handle BrakeAssist
+        if (BrakeAssist)
+        {
+             if (brake > 0)
+                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+             else
+                rb.constraints = RigidbodyConstraints.None;
+        }
+    }
+
     public void EnableControls()
     {
         hasBeenEnabled = true;
@@ -808,7 +910,7 @@ public class KartController : NetworkBehaviour
         Debug.Log($"[KartController] {gameObject.name} stun ended");
     }
     
-    private System.Collections.IEnumerator ActivateInputAfterDelay()
+     private System.Collections.IEnumerator ActivateInputAfterDelay()
     {
         yield return new WaitForSeconds(0.1f);
         
@@ -850,37 +952,13 @@ public class KartController : NetworkBehaviour
     {
         if (!IsOwner || !controlsEnabled) return;
         
-        if (value.isPressed)
-        {
-            gas = 1;
-        }
-        if(!value.isPressed)
-        {
-            gas = 0;
-        }
+        inputGas = value.isPressed ? 1f : 0f;
     }
     public void OnBrake(InputValue value)
     {
         if (!IsOwner || !controlsEnabled) return;
         
-        if (value.isPressed)
-        {
-            brake = 1;
-            taillight.GetComponent<Renderer>().material.EnableKeyword("_EMISSION");
-            if (BrakeAssist)
-            {
-                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-            }
-        }
-        if (!value.isPressed)
-        {
-            brake = 0;
-            taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
-            if (BrakeAssist)
-            {
-                rb.constraints = RigidbodyConstraints.None;
-            }
-        }
+        inputBrake = value.isPressed;
     }
     public void OnSteering(InputValue value)
     {
@@ -890,16 +968,7 @@ public class KartController : NetworkBehaviour
     }
     public void OnReverse(InputValue value)
     {
-        if (!IsOwner || !controlsEnabled) return;
-        
-        if (reverse)
-        {
-            reverse = false;
-        }
-        else
-        {
-            reverse = true; 
-        }
+        // Deprecated: Reverse is now handled by holding Brake
     }
     public void OnReset()
     {
@@ -1112,14 +1181,189 @@ public class KartController : NetworkBehaviour
         rb.constraints = RigidbodyConstraints.None;
     }
     
+    private void UpdateRespawnLogic()
+    {
+        // Safety check for layer mask
+        if (splineLayer.value == 0) return;
+
+        // Only Server or Owner should control position/respawn
+        if (!IsServer && !IsOwner) return;
+
+        // Reduce grace period
+        if (respawnGracePeriod > 0f)
+        {
+            respawnGracePeriod -= Time.deltaTime;
+            // During grace period, don't accumulate off-track time
+            return;
+        }
+
+        bool isOnSpline = CheckIfOnSpline();
+
+        if (isOnSpline)
+        {
+            offTrackTimer = 0f;
+            
+            // Record position history periodically
+            if (Time.time - lastSnapshotTime > snapshotInterval)
+            {
+                lastSnapshotTime = Time.time;
+                validPositionHistory.Add(new PositionSnapshot
+                {
+                    position = transform.position,
+                    rotation = transform.rotation,
+                    timestamp = Time.time
+                });
+                float maxHistoryTime = Mathf.Max(10f, respawnBacktrackTime * 2f);
+                
+                // Remove old snapshots
+                while (validPositionHistory.Count > 0 && Time.time - validPositionHistory[0].timestamp > maxHistoryTime)
+                {
+                    validPositionHistory.RemoveAt(0);
+                }
+            }
+        }
+        else
+        {
+            offTrackTimer += Time.deltaTime;
+        }
+        if (offTrackTimer > respawnDelay || transform.position.y < fallRespawnY)
+        {
+            RespawnKart();
+        }
+    }
+
+    private void RespawnKart()
+    {
+        offTrackTimer = 0f;
+        respawnGracePeriod = 1.0f;
+        Vector3 respawnPos = transform.position;
+        Quaternion respawnRot = transform.rotation;
+        bool foundValidPos = false;
+        if (validPositionHistory.Count > 0)
+        {
+            float targetTime = Time.time - respawnBacktrackTime;
+            PositionSnapshot bestSnapshot = validPositionHistory[0];
+            float minTimeDiff = Mathf.Abs(bestSnapshot.timestamp - targetTime);
+            
+            for (int i = 0; i < validPositionHistory.Count; i++)
+            {
+                float diff = Mathf.Abs(validPositionHistory[i].timestamp - targetTime);
+                if (diff < minTimeDiff)
+                {
+                    minTimeDiff = diff;
+                    bestSnapshot = validPositionHistory[i];
+                }
+            }
+            
+            respawnPos = bestSnapshot.position;
+            respawnRot = bestSnapshot.rotation;
+            foundValidPos = true;
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+            {
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                    float t;
+                    Unity.Mathematics.float3 nearest;
+                    float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, respawnPos, out nearest, out t);
+                    if (dSq < 100f) // Within 10m
+                    {
+                        Vector3 splinePos = nearest;
+                        Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                        respawnPos = new Vector3(splinePos.x, respawnPos.y, splinePos.z);
+                        if (splineTangent.magnitude > 0.1f)
+                        {
+                            splineTangent.y = 0;
+                            splineTangent.Normalize();
+                            respawnRot = Quaternion.LookRotation(splineTangent);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!foundValidPos)
+        {
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+            {
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                    float t;
+                    Unity.Mathematics.float3 nearest;
+                    UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, transform.position, out nearest, out t);
+                    
+                    Vector3 splinePos = nearest;
+                    Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                    
+                    respawnPos = splinePos;
+                    if (splineTangent.magnitude > 0.1f)
+                    {
+                        splineTangent.y = 0;
+                        splineTangent.Normalize();
+                        respawnRot = Quaternion.LookRotation(splineTangent);
+                    }
+                    foundValidPos = true;
+                }
+            }
+            
+            if (!foundValidPos)
+            {
+                // Last resort fallback
+                respawnPos = transform.position + Vector3.up * 5f;
+                Debug.LogWarning("[KartController] No valid history or spline found for respawn!");
+            }
+        }
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+
+            Vector3 finalPos = respawnPos + Vector3.up * 2.0f;
+            var netTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
+            if (netTransform == null)
+            {
+                netTransform = GetComponentInParent<Unity.Netcode.Components.NetworkTransform>();
+            }
+            
+            bool wasEnabled = true;
+            if (netTransform != null)
+            {
+                wasEnabled = netTransform.enabled;
+                netTransform.enabled = false;
+            }
+            rb.position = finalPos;
+            rb.rotation = respawnRot;
+            transform.position = finalPos;
+            transform.rotation = respawnRot;
+            if (netTransform != null && wasEnabled)
+            {
+                StartCoroutine(ReenableNetworkTransform(netTransform));
+            }
+        }
+        else
+        {
+            transform.position = respawnPos + Vector3.up * 2.0f;
+            transform.rotation = respawnRot;
+        }
+        
+        Debug.Log($"[KartController] Respawned {gameObject.name} at {respawnPos} (backtracked ~{respawnBacktrackTime}s).");
+    }
+    
+    private System.Collections.IEnumerator ReenableNetworkTransform(Unity.Netcode.Components.NetworkTransform netTransform)
+    {
+        yield return null; // Wait one frame
+        if (netTransform != null)
+        {
+            netTransform.enabled = true;
+        }
+    }
+
     private bool CheckIfOnSpline()
     {
-        // Raycast downward to detect if on spline layer
         RaycastHit hit;
         Vector3 rayOrigin = transform.position;
         Vector3 rayDirection = Vector3.down;
-        
-        // Check from kart center
         if (Physics.Raycast(rayOrigin, rayDirection, out hit, detectionDistance, splineLayer))
         {
             if (showDebugInfo && Time.frameCount % 60 == 0)
@@ -1128,8 +1372,6 @@ public class KartController : NetworkBehaviour
             }
             return true;
         }
-        
-        // Check from wheel positions (more accurate)
         if (driveWheels != null && driveWheels.Length > 0)
         {
             int wheelsOnSpline = 0;

@@ -1294,6 +1294,10 @@ MonoBehaviour:
   centerOfMassOffset: {x: 0, y: -0.5, z: 0}
   maxSpeed: 100
   enableSplineSpeedPenalty: 1
+  enableRespawn: 1
+  respawnDelay: 2
+  fallRespawnY: -10
+  respawnBacktrackTime: 5
   splineLayer:
     serializedVersion: 2
     m_Bits: 64

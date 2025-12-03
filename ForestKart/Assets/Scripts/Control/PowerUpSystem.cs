@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using Unity.Netcode;
 using System.Collections.Generic;
+using UnityEngine.Splines;
 
 [RequireComponent(typeof(KartController))]
 public class PowerUpSystem : NetworkBehaviour
@@ -154,16 +155,21 @@ public class PowerUpSystem : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void UsePowerUpServerRpc(ServerRpcParams serverRpcParams = default)
     {
-        NetworkObject kartNetObj = kartController?.GetComponent<NetworkObject>();
-        if (kartNetObj == null)
-        {
-            kartNetObj = kartController?.GetComponentInParent<NetworkObject>();
-        }
+        bool isAI = GetComponent<AIKartController>() != null || GetComponentInParent<AIKartController>() != null;
         
-        if (kartNetObj == null || kartNetObj.OwnerClientId != serverRpcParams.Receive.SenderClientId)
+        if (!isAI)
         {
-            Debug.LogWarning($"[PowerUpSystem] UsePowerUp called by non-owner! Sender: {serverRpcParams.Receive.SenderClientId}, KartOwner: {kartNetObj?.OwnerClientId}");
-            return;
+            NetworkObject kartNetObj = kartController?.GetComponent<NetworkObject>();
+            if (kartNetObj == null)
+            {
+                kartNetObj = kartController?.GetComponentInParent<NetworkObject>();
+            }
+            
+            if (kartNetObj == null || kartNetObj.OwnerClientId != serverRpcParams.Receive.SenderClientId)
+            {
+                Debug.LogWarning($"[PowerUpSystem] UsePowerUp called by non-owner! Sender: {serverRpcParams.Receive.SenderClientId}, KartOwner: {kartNetObj?.OwnerClientId}");
+                return;
+            }
         }
         
         if (!hasPowerUp.Value || currentPowerUpTypeIndex.Value < 0)
@@ -339,10 +345,24 @@ public class PowerUpSystem : NetworkBehaviour
     }
     
     [ServerRpc(RequireOwnership = false)]
-    private void FireShellServerRpc(ulong ownerId, int prefabIndex, float speed, float hitForce, float stunDuration)
+    private void FireShellServerRpc(ulong ownerId, int prefabIndex, float speed, float hitForce, float stunDuration, ServerRpcParams serverRpcParams = default)
     {
-        KartController kart = NetworkManager.Singleton.ConnectedClients[ownerId].PlayerObject?.GetComponentInChildren<KartController>();
-        if (kart == null) return;
+        Debug.Log($"[PowerUpSystem] FireShellServerRpc called by SenderClientId: {serverRpcParams.Receive.SenderClientId}, passed ownerId: {ownerId}");
+
+        KartController kart = null;
+        kart = this.kartController;
+        if (kart == null && NetworkManager.Singleton.ConnectedClients.TryGetValue(ownerId, out var client))
+        {
+             kart = client.PlayerObject?.GetComponentInChildren<KartController>();
+        }
+        
+        if (kart == null) 
+        {
+             Debug.LogWarning($"[PowerUpSystem] FireShellServerRpc: Could not find kart controller! OwnerId: {ownerId}");
+             return;
+        }
+
+        Debug.Log($"[PowerUpSystem] Shell Owner identified as: {kart.gameObject.name} (NetId: {kart.NetworkObjectId})");
         
         if (prefabIndex < 0 || prefabIndex >= availablePowerUps.Length) return;
         
@@ -374,6 +394,19 @@ public class PowerUpSystem : NetworkBehaviour
         {
             netObj = shell.AddComponent<NetworkObject>();
         }
+        var netTransform = shell.GetComponent<Unity.Netcode.Components.NetworkTransform>();
+        if (netTransform == null)
+        {
+            netTransform = shell.AddComponent<Unity.Netcode.Components.NetworkTransform>();
+        }
+        netTransform.SyncPositionX = true;
+        netTransform.SyncPositionY = true;
+        netTransform.SyncPositionZ = true;
+        netTransform.SyncRotAngleX = true;
+        netTransform.SyncRotAngleY = true;
+        netTransform.SyncRotAngleZ = true;
+        netTransform.UseHalfFloatPrecision = false;
+        netTransform.Interpolate = true;
         
         netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
     }
@@ -402,10 +435,23 @@ public class PowerUpSystem : NetworkBehaviour
     }
     
     [ServerRpc(RequireOwnership = false)]
-    private void FireRedShellServerRpc(ulong ownerId, int prefabIndex, float speed, float hitForce, float stunDuration, float trackingRange)
+    private void FireRedShellServerRpc(ulong ownerId, int prefabIndex, float speed, float hitForce, float stunDuration, float trackingRange, ServerRpcParams serverRpcParams = default)
     {
-        KartController kart = NetworkManager.Singleton.ConnectedClients[ownerId].PlayerObject?.GetComponentInChildren<KartController>();
-        if (kart == null) return;
+        Debug.Log($"[PowerUpSystem] FireRedShellServerRpc called by SenderClientId: {serverRpcParams.Receive.SenderClientId}, passed ownerId: {ownerId}");
+        KartController kart = null;
+        kart = this.kartController;
+        if (kart == null && NetworkManager.Singleton.ConnectedClients.TryGetValue(ownerId, out var client))
+        {
+             kart = client.PlayerObject?.GetComponentInChildren<KartController>();
+        }
+
+        if (kart == null)
+        {
+            Debug.LogWarning($"[PowerUpSystem] FireRedShellServerRpc: Could not find kart controller! OwnerId: {ownerId}");
+            return;
+        }
+
+        Debug.Log($"[PowerUpSystem] RedShell Owner identified as: {kart.gameObject.name} (NetId: {kart.NetworkObjectId})");
         
         if (prefabIndex < 0 || prefabIndex >= availablePowerUps.Length) return;
         
@@ -439,6 +485,19 @@ public class PowerUpSystem : NetworkBehaviour
         {
             netObj = redShell.AddComponent<NetworkObject>();
         }
+        var netTransform = redShell.GetComponent<Unity.Netcode.Components.NetworkTransform>();
+        if (netTransform == null)
+        {
+            netTransform = redShell.AddComponent<Unity.Netcode.Components.NetworkTransform>();
+        }
+        netTransform.SyncPositionX = true;
+        netTransform.SyncPositionY = true;
+        netTransform.SyncPositionZ = true;
+        netTransform.SyncRotAngleX = true;
+        netTransform.SyncRotAngleY = true;
+        netTransform.SyncRotAngleZ = true;
+        netTransform.UseHalfFloatPrecision = false;
+        netTransform.Interpolate = true; 
         
         netObj.SpawnWithOwnership(NetworkManager.ServerClientId);
     }
@@ -447,22 +506,74 @@ public class PowerUpSystem : NetworkBehaviour
     {
         Transform nearest = null;
         float nearestDistance = float.MaxValue;
-        
+        float bestScore = float.MinValue;
         KartController[] allKarts = FindObjectsByType<KartController>(FindObjectsSortMode.None);
+        SplineContainer spline = null;
+        float selfSplinePos = -1f;
+        AIKartController myAI = self.GetComponent<AIKartController>();
+        if (myAI == null) myAI = self.GetComponentInParent<AIKartController>();
+        
+        if (myAI != null && myAI.splinePath != null)
+        {
+             spline = myAI.splinePath;
+        }
+        else if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+        {
+             spline = GameManager.Instance.raceTrack;
+        }
+        else
+        {
+             SplineContainer[] splines = FindObjectsByType<SplineContainer>(FindObjectsSortMode.None);
+             if (splines.Length > 0) spline = splines[0];
+        }
+
+        if (spline != null)
+        {
+             using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+             {
+                 float t;
+                 UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, self.position, out _, out t);
+                 selfSplinePos = t;
+             }
+        }
         
         foreach (var kart in allKarts)
         {
-            if (kart.transform == self) continue;
+            if (kart.transform == self || kart.transform.root == self.root) continue;
             
             float distance = Vector3.Distance(self.position, kart.transform.position);
-            if (distance < range && distance < nearestDistance)
+            if (distance > range) continue;
+            if (spline != null && selfSplinePos >= 0f)
+            {
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                     float targetT;
+                     UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, kart.transform.position, out _, out targetT);
+                     float diff = targetT - selfSplinePos;
+                     if (diff < -0.5f) diff += 1f; 
+                     if (diff > 0.5f) diff -= 1f; 
+                     if (diff > 0f)
+                     {
+                         float score = 1.0f - diff; 
+                         if (score > bestScore)
+                         {
+                             bestScore = score;
+                             nearest = kart.transform;
+                         }
+                     }
+                }
+            }
+            else
             {
                 Vector3 direction = (kart.transform.position - self.position).normalized;
                 float dot = Vector3.Dot(self.forward, direction);
-                if (dot > 0.3f)
+                if (dot > 0.5f) 
                 {
-                    nearest = kart.transform;
-                    nearestDistance = distance;
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = kart.transform;
+                    }
                 }
             }
         }
