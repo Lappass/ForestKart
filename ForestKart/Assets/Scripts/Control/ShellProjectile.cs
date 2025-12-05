@@ -292,11 +292,20 @@ public class ShellProjectile : NetworkBehaviour
                 NetworkObject ownerNetObj = ownerTransform.GetComponent<NetworkObject>();
                 if (ownerNetObj == null) ownerNetObj = ownerTransform.GetComponentInParent<NetworkObject>();
                 
-                if (kartNetObj != null && ownerNetObj != null && kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
+                if (kartNetObj != null && ownerNetObj != null)
                 {
-                    if (ownerNetObj.OwnerClientId != NetworkManager.ServerClientId)
+                    // Prevent self-hit (same NetworkObject)
+                    if (kartNetObj.NetworkObjectId == ownerNetObj.NetworkObjectId)
                     {
                         isOwnerKart = true;
+                    }
+                    // Prevent friendly fire for non-server clients (Server owns multiple objects so we allow interaction)
+                    else if (kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
+                    {
+                        if (ownerNetObj.OwnerClientId != NetworkManager.ServerClientId)
+                        {
+                            isOwnerKart = true;
+                        }
                     }
                 }
                 Debug.Log($"[ShellProjectile] Check Hit {kart.name}. OwnerID: {ownerNetObj?.OwnerClientId}, TargetID: {kartNetObj?.OwnerClientId}. ServerID: {NetworkManager.ServerClientId}. IsOwnerKart: {isOwnerKart}");

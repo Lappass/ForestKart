@@ -746,6 +746,11 @@ public class KartController : NetworkBehaviour
         }
 
         Drive(gas, brake,steer,drift);
+    }
+    
+    private void FixedUpdate()
+    {
+        if (!controlsEnabled) return;
         AddDownForce();
     }
     
@@ -1013,13 +1018,6 @@ public class KartController : NetworkBehaviour
                 {
                     acceleration = 0f;
                 }
-            }
-            
-            if (horizontalSpeed > effectiveMaxSpeed)
-            {
-                Vector3 limitedVelocity = horizontalVelocity.normalized * effectiveMaxSpeed;
-                limitedVelocity.y = rb.linearVelocity.y;
-                rb.linearVelocity = limitedVelocity;
             }
         }
         
