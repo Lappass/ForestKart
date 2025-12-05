@@ -156,10 +156,20 @@ public class KartController : NetworkBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.maxAngularVelocity = 7f;
         
+        // Apply bouncy collider and increase grip
+        ConfigurePhysics();
+        
         if (maxSpeed <= 0f)
         {
-            maxSpeed = 50f;
+            maxSpeed = 100f; // Increased from 50f
         }
+        else
+        {
+            maxSpeed *= 1.6f;
+        }
+        
+        DriveTorque *= 2.0f; // More acceleration
+        Downforce *= 1.8f; // Significantly more downforce for grip
         
         originalDriveTorque = DriveTorque;
         originalMaxSpeed = maxSpeed;
@@ -240,6 +250,47 @@ public class KartController : NetworkBehaviour
             drivingCameraBack.Priority = 0;
             drivingCameraBack.enabled = false;
             drivingCameraBack.gameObject.SetActive(false);
+        }
+    }
+    
+    private void ConfigurePhysics()
+    {
+        // Create bouncy material
+        PhysicsMaterial bouncyMat = new PhysicsMaterial("KartBouncy");
+        bouncyMat.bounciness = 0.8f;
+        bouncyMat.bounceCombine = PhysicsMaterialCombine.Maximum;
+        bouncyMat.dynamicFriction = 0.6f;
+        bouncyMat.staticFriction = 0.6f;
+        
+        // Apply to main collider
+        Collider col = GetComponent<Collider>();
+        if (col != null)
+        {
+            col.sharedMaterial = bouncyMat;
+        }
+        
+        // Increase mass for impact
+        if (rb != null)
+        {
+            rb.mass *= 2f;
+        }
+        
+        // Increase wheel grip
+        if (driveWheels != null)
+        {
+            foreach (var wheel in driveWheels)
+            {
+                if (wheel != null)
+                {
+                    WheelFrictionCurve forward = wheel.forwardFriction;
+                    forward.stiffness *= 1.5f; // 50% more grip
+                    wheel.forwardFriction = forward;
+                    
+                    WheelFrictionCurve sideways = wheel.sidewaysFriction;
+                    sideways.stiffness *= 1.3f; // 30% more grip
+                    wheel.sidewaysFriction = sideways;
+                }
+            }
         }
     }
     
