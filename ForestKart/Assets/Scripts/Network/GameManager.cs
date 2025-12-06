@@ -31,7 +31,7 @@ public class GameManager : NetworkBehaviour
     
     [Header("Spawn Settings")]
     public SplineContainer raceTrack;
-    public int aiKartCount = 3;
+    public int totalKartCount = 21;
     public float spawnSpacing = 3f;
     
     [Tooltip("Spawn points list (optional). If set, will use these points instead of spacing")]
@@ -119,7 +119,9 @@ public class GameManager : NetworkBehaviour
         Vector3 startDirection = SplineUtility.EvaluateTangent(raceTrack.Spline, 0f);
         Quaternion startRotation = Quaternion.LookRotation(startDirection);
         
-        int totalSpawnCount = NetworkManager.Singleton.ConnectedClientsIds.Count + aiKartCount;
+        int playerCount = NetworkManager.Singleton.ConnectedClientsIds.Count;
+        int aiKartCount = Mathf.Max(0, totalKartCount - playerCount);
+        int totalSpawnCount = playerCount + aiKartCount;
         
         if (useSpawnPoints)
         {

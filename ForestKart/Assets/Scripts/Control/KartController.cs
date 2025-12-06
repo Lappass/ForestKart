@@ -19,8 +19,8 @@ public class KartController : NetworkBehaviour
     public WheelCollider[] driveWheels;
     public GameObject[] driveWheelMeshes;
     private Quaternion[] wheelMeshInitialRotations;
-    private Quaternion[] rearWheelInitialLocalRotations; // Store initial rotation relative to car body for rear wheels
-    private float[] rearWheelRollingAngles; // Accumulate rolling angle for rear wheels
+    private Quaternion[] rearWheelInitialLocalRotations;
+    private float[] rearWheelRollingAngles;
     private bool wheelRotationsInitialized = false;
     public float DriveTorque = 100;
     public float BrakeTorque = 500;
@@ -65,18 +65,17 @@ public class KartController : NetworkBehaviour
     }
     
     private List<PositionSnapshot> validPositionHistory = new List<PositionSnapshot>();
-    private float snapshotInterval = 0.2f; // Take a snapshot every 0.2s
+    private float snapshotInterval = 0.2f;
     private float lastSnapshotTime = 0f;
     private float offTrackTimer = 0f;
-    private float respawnGracePeriod = 0f; // Grace period after respawn to avoid immediate re-respawn
+    private float respawnGracePeriod = 0f;
 
-    // Inputs
     private float inputGas = 0f;
     private bool inputBrake = false;
     private bool isAI = false;
     
     [Tooltip("Layer mask for detecting spline. If set to Nothing, no speed penalty will be applied")]
-    public LayerMask splineLayer = 1 << 0; // Default layer
+    public LayerMask splineLayer = 1 << 0;
     
     [Tooltip("Detection distance (downward raycast distance)")]
     public float detectionDistance = 5f;
@@ -123,15 +122,12 @@ public class KartController : NetworkBehaviour
     
     void Awake()
     {
-        // Will be enabled later only for local player
-        // Search in parent as well since PlayerInput might be on the root object
         UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             playerInput.enabled = false;
             playerInput.DeactivateInput();
         }
-        // This ensures cameras are off during intro sequence in multiplayer
         if (drivingCameraFront != null)
         {
             drivingCameraFront.Priority = 0;
@@ -153,27 +149,25 @@ public class KartController : NetworkBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.maxAngularVelocity = 7f;
         
-        // Apply bouncy collider and increase grip
         ConfigurePhysics();
         
         if (maxSpeed <= 0f)
         {
-            maxSpeed = 100f; // Increased from 50f
+            maxSpeed = 100f;
         }
         else
         {
             maxSpeed *= 1.6f;
         }
         
-        DriveTorque *= 2.0f; // More acceleration
-        Downforce *= 1.8f; // Significantly more downforce for grip
+        DriveTorque *= 2.0f;
+        Downforce *= 1.8f;
         
         originalDriveTorque = DriveTorque;
         originalMaxSpeed = maxSpeed;
         
         isAI = GetComponent<AIKartController>() != null || GetComponentInParent<AIKartController>() != null;
 
-        // Initial snapshot
         validPositionHistory.Add(new PositionSnapshot 
         { 
             position = transform.position, 
@@ -181,7 +175,6 @@ public class KartController : NetworkBehaviour
             timestamp = Time.time 
         });
         
-        // Initialize wheel mesh rotation offsets
         if (driveWheels != null && driveWheelMeshes != null)
         {
             if (driveWheels.Length != driveWheelMeshes.Length)
@@ -197,7 +190,6 @@ public class KartController : NetworkBehaviour
             {
                 if (i < driveWheels.Length && driveWheels[i] != null && driveWheelMeshes[i] != null)
                 {
-                    // Get initial world rotation of wheel collider
                     Vector3 wheelPos;
                     Quaternion wheelRot;
                     driveWheels[i].GetWorldPose(out wheelPos, out wheelRot);
@@ -233,7 +225,6 @@ public class KartController : NetworkBehaviour
         {
             controlsEnabled = false;
         }
-        // This prevents cameras from being active during intro sequence
         if (drivingCameraFront != null)
         {
             drivingCameraFront.Priority = 0;
@@ -250,27 +241,23 @@ public class KartController : NetworkBehaviour
     
     private void ConfigurePhysics()
     {
-        // Create bouncy material
         PhysicsMaterial bouncyMat = new PhysicsMaterial("KartBouncy");
         bouncyMat.bounciness = 0.8f;
         bouncyMat.bounceCombine = PhysicsMaterialCombine.Maximum;
         bouncyMat.dynamicFriction = 0.6f;
         bouncyMat.staticFriction = 0.6f;
         
-        // Apply to main collider
         Collider col = GetComponent<Collider>();
         if (col != null)
         {
             col.sharedMaterial = bouncyMat;
         }
         
-        // Increase mass for impact
         if (rb != null)
         {
             rb.mass *= 2f;
         }
         
-        // Increase wheel grip
         if (driveWheels != null)
         {
             foreach (var wheel in driveWheels)
@@ -278,11 +265,11 @@ public class KartController : NetworkBehaviour
                 if (wheel != null)
                 {
                     WheelFrictionCurve forward = wheel.forwardFriction;
-                    forward.stiffness *= 1.5f; // 50% more grip
+                    forward.stiffness *= 1.5f;
                     wheel.forwardFriction = forward;
                     
                     WheelFrictionCurve sideways = wheel.sidewaysFriction;
-                    sideways.stiffness *= 1.3f; // 30% more grip
+                    sideways.stiffness *= 1.3f;
                     wheel.sidewaysFriction = sideways;
                 }
             }
@@ -308,15 +295,12 @@ public class KartController : NetworkBehaviour
         
         if (IsOwner)
         {
-            // Initialize camera: default to front camera, but check if intro is playing first
             StartCoroutine(InitializeCamerasAfterIntroCheck());
             StartCoroutine(WaitForPositionSync());
             StartCoroutine(SetupPlayerInputDelayed());
         }
         else
         {
-            // Non-local player: ensure PlayerInput is completely disabled
-            // Search in parent as well
             UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
             if (playerInput != null)
             {
@@ -324,7 +308,6 @@ public class KartController : NetworkBehaviour
                 playerInput.DeactivateInput();
             }
             
-            // Disable cameras
             if (drivingCameraFront != null)
             {
                 drivingCameraFront.Priority = 0;
@@ -492,7 +475,6 @@ public class KartController : NetworkBehaviour
                 Destroy(driverKartController);
             }
 
-            // Disable PlayerInput on the instantiated model if it exists
             if (!IsOwner)
             {
                 var playerInputs = currentDriverModel.GetComponentsInChildren<UnityEngine.InputSystem.PlayerInput>(true);
@@ -537,7 +519,6 @@ public class KartController : NetworkBehaviour
             return;
         }
         
-        // Disable both driving cameras
         if (drivingCameraFront != null)
         {
             drivingCameraFront.gameObject.SetActive(false);
@@ -576,10 +557,8 @@ public class KartController : NetworkBehaviour
     }
     private System.Collections.IEnumerator InitializeCamerasAfterIntroCheck()
     {
-        // Wait a frame to ensure GameManager is initialized
         yield return null;
         
-        // Save original priorities
         if (drivingCameraFront != null)
         {
             savedFrontCameraPriority = drivingCameraFront.Priority;
@@ -606,7 +585,6 @@ public class KartController : NetworkBehaviour
             isIntroPlaying = GameManager.Instance.IsPlayingIntro();
         }
         
-        // If intro is playing, keep cameras disabled and wait for it to finish
         if (isIntroPlaying)
         {
             while (GameManager.Instance != null && GameManager.Instance.IsPlayingIntro())
@@ -654,7 +632,6 @@ public class KartController : NetworkBehaviour
     }
     public CinemachineCamera GetActiveDrivingCamera()
     {
-        // Don't return camera if intro is playing or cameras are not initialized
         if (!camerasInitialized)
         {
             return null;
@@ -673,7 +650,6 @@ public class KartController : NetworkBehaviour
         {
             return drivingCameraBack;
         }
-        // Fallback: return front camera if available, otherwise back
         return drivingCameraFront != null ? drivingCameraFront : drivingCameraBack;
     }
     
@@ -685,7 +661,6 @@ public class KartController : NetworkBehaviour
         
         if (isFrontCamera)
         {
-            // Switch to front camera
             if (drivingCameraBack != null)
             {
                 drivingCameraBack.gameObject.SetActive(false);
@@ -698,7 +673,6 @@ public class KartController : NetworkBehaviour
         }
         else
         {
-            // Switch to back camera
             if (drivingCameraFront != null)
             {
                 drivingCameraFront.gameObject.SetActive(false);
@@ -710,7 +684,6 @@ public class KartController : NetworkBehaviour
             }
         }
         
-        // Update LocalPlayerSetup camera reference
         var localPlayerSetup = GetComponentInParent<LocalPlayerSetup>();
         if (localPlayerSetup != null)
         {
@@ -726,7 +699,6 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         
-        // Search in parent as well
         UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
@@ -770,27 +742,20 @@ public class KartController : NetworkBehaviour
     
     private void UpdatePlayerControls()
     {
-        // Auto-reverse logic:
-        // If holding brake:
-        // - If moving forward > threshold: Brake
-        // - If stopped or moving backward: Reverse (and treat brake as gas)
-        
         if (inputBrake)
         {
-            // Check local forward speed
             float forwardSpeed = transform.InverseTransformDirection(rb.linearVelocity).z;
             
-            if (forwardSpeed > 1.0f) // Moving forward: Brake
+            if (forwardSpeed > 1.0f)
             {
                 brake = 1f;
                 reverse = false;
                 gas = inputGas; 
             }
-            else // Stopped or Reversing: Reverse
+            else
             {
                 brake = 0f;
                 reverse = true;
-                // Use brake button as throttle for reverse
                 gas = 1f; 
             }
         }
@@ -801,7 +766,6 @@ public class KartController : NetworkBehaviour
             gas = inputGas;
         }
         
-        // Visuals
         if (taillight != null)
         {
             if (inputBrake)
@@ -810,7 +774,6 @@ public class KartController : NetworkBehaviour
                 taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
         }
         
-        // Handle BrakeAssist
         if (BrakeAssist)
         {
              if (brake > 0)
@@ -850,8 +813,20 @@ public class KartController : NetworkBehaviour
         }
         else
         {
-            // Player: Use ClientRpc to let owner client apply effect
             ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
+        }
+    }
+    
+    public void OnEnterWaterPuddle(float blurDuration)
+    {
+        if (!IsOwner) return;
+        
+        AIKartController aiController = GetComponent<AIKartController>();
+        if (aiController != null) return;
+        
+        if (ScreenBlurEffect.Instance != null)
+        {
+            ScreenBlurEffect.Instance.ApplyBlur(blurDuration);
         }
     }
     
@@ -874,7 +849,6 @@ public class KartController : NetworkBehaviour
         }
         else
         {
-            // Player: Use ClientRpc to let owner client apply effect
             ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
         }
     }
@@ -913,7 +887,6 @@ public class KartController : NetworkBehaviour
     [ClientRpc]
     private void ApplyProjectileHitClientRpc(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
-        // Only owner executes physics effect (for player karts)
         if (!IsOwner) return;
         
         Rigidbody kartRb = GetComponent<Rigidbody>();
@@ -945,7 +918,6 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         
-        // Search in parent as well
         UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
@@ -999,7 +971,6 @@ public class KartController : NetworkBehaviour
     }
     public void OnReverse(InputValue value)
     {
-        // Deprecated: Reverse is now handled by holding Brake
     }
     public void OnReset()
     {
@@ -1064,7 +1035,6 @@ public class KartController : NetworkBehaviour
             driveWheels[i].GetWorldPose(out wheelposition, out wheelrotation);
             driveWheelMeshes[i].transform.position = wheelposition;
             
-            // Apply rotation
             if (wheelRotationsInitialized)
             {
                 if (i >= 2 && i < rearWheelInitialLocalRotations.Length)
@@ -1207,17 +1177,13 @@ public class KartController : NetworkBehaviour
     
     private void UpdateRespawnLogic()
     {
-        // Safety check for layer mask
         if (splineLayer.value == 0) return;
 
-        // Only Server or Owner should control position/respawn
         if (!IsServer && !IsOwner) return;
 
-        // Reduce grace period
         if (respawnGracePeriod > 0f)
         {
             respawnGracePeriod -= Time.deltaTime;
-            // During grace period, don't accumulate off-track time
             return;
         }
 
@@ -1227,7 +1193,6 @@ public class KartController : NetworkBehaviour
         {
             offTrackTimer = 0f;
             
-            // Record position history periodically
             if (Time.time - lastSnapshotTime > snapshotInterval)
             {
                 lastSnapshotTime = Time.time;
@@ -1239,7 +1204,6 @@ public class KartController : NetworkBehaviour
                 });
                 float maxHistoryTime = Mathf.Max(10f, respawnBacktrackTime * 2f);
                 
-                // Remove old snapshots
                 while (validPositionHistory.Count > 0 && Time.time - validPositionHistory[0].timestamp > maxHistoryTime)
                 {
                     validPositionHistory.RemoveAt(0);
@@ -1290,7 +1254,7 @@ public class KartController : NetworkBehaviour
                     float t;
                     Unity.Mathematics.float3 nearest;
                     float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, respawnPos, out nearest, out t);
-                    if (dSq < 100f) // Within 10m
+                    if (dSq < 100f)
                     {
                         Vector3 splinePos = nearest;
                         Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
@@ -1333,7 +1297,6 @@ public class KartController : NetworkBehaviour
             
             if (!foundValidPos)
             {
-                // Last resort fallback
                 respawnPos = transform.position + Vector3.up * 5f;
                 Debug.LogWarning("[KartController] No valid history or spline found for respawn!");
             }
@@ -1375,7 +1338,7 @@ public class KartController : NetworkBehaviour
     
     private System.Collections.IEnumerator ReenableNetworkTransform(Unity.Netcode.Components.NetworkTransform netTransform)
     {
-        yield return null; // Wait one frame
+        yield return null;
         if (netTransform != null)
         {
             netTransform.enabled = true;
@@ -1415,7 +1378,6 @@ public class KartController : NetworkBehaviour
                 Debug.Log($"[KartController] Wheel detection: {wheelsOnSpline}/{driveWheels.Length} on spline");
             }
             
-            // If at least half of the wheels are on spline, consider on spline
             return wheelsOnSpline >= driveWheels.Length / 2;
         }
         
@@ -1429,7 +1391,6 @@ public class KartController : NetworkBehaviour
     
     private void UpdateSplineSpeedPenalty()
     {
-        // If splineLayer is not set, default to no speed penalty
         if (splineLayer.value == 0)
         {
             currentSpeedMultiplier = 1f;
