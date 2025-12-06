@@ -130,7 +130,6 @@ public class KartController : NetworkBehaviour
         {
             playerInput.enabled = false;
             playerInput.DeactivateInput();
-            Debug.Log($"[KartController] Awake: Disabled PlayerInput on {playerInput.gameObject.name}");
         }
         // This ensures cameras are off during intro sequence in multiplayer
         if (drivingCameraFront != null)
@@ -138,14 +137,12 @@ public class KartController : NetworkBehaviour
             drivingCameraFront.Priority = 0;
             drivingCameraFront.enabled = false;
             drivingCameraFront.gameObject.SetActive(false);
-            Debug.Log("[KartController] Awake: Disabled drivingCameraFront");
         }
         if (drivingCameraBack != null)
         {
             drivingCameraBack.Priority = 0;
             drivingCameraBack.enabled = false;
             drivingCameraBack.gameObject.SetActive(false);
-            Debug.Log("[KartController] Awake: Disabled drivingCameraBack");
         }
     }
     
@@ -209,12 +206,10 @@ public class KartController : NetworkBehaviour
                     {
                         rearWheelInitialLocalRotations[i] = Quaternion.Inverse(transform.rotation) * driveWheelMeshes[i].transform.rotation;
                         rearWheelRollingAngles[i] = 0f;
-                        Debug.Log($"[KartController] Initialized rear wheel {i} relative to body.");
                     }
                     else
                     {
                         wheelMeshInitialRotations[i] = driveWheelMeshes[i].transform.rotation * Quaternion.Inverse(wheelRot);
-                        Debug.Log($"[KartController] Initialized front wheel {i} rotation offset. Wheel: {driveWheels[i].name}, Mesh: {driveWheelMeshes[i].name}");
                     }
                 }
                 else
@@ -327,7 +322,6 @@ public class KartController : NetworkBehaviour
             {
                 playerInput.enabled = false;
                 playerInput.DeactivateInput();
-                Debug.Log($"[KartController] OnNetworkSpawn: Disabled PlayerInput for non-owner {gameObject.name} (found on {playerInput.gameObject.name})");
             }
             
             // Disable cameras
@@ -350,15 +344,11 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.5f);
         
-        Debug.Log("[KartController] Attempting to spawn driver model...");
-        
         ReplaceKartModel();
     }
     
     private void ReplaceKartModel()
     {
-        Debug.Log("[KartController] ReplaceKartModel called");
-        
         if (CharacterSelectionUI.Instance == null)
         {
             Debug.LogWarning("[KartController] CharacterSelectionUI.Instance is null!");
@@ -371,21 +361,17 @@ public class KartController : NetworkBehaviour
             return;
         }
         
-        Debug.Log("[KartController] CharacterSelectionUI and NetworkManager found");
-        
         ulong clientId = 0;
         NetworkObject playerNetObj = GetComponentInParent<NetworkObject>();
         
         if (playerNetObj != null && playerNetObj.IsSpawned)
         {
             clientId = playerNetObj.OwnerClientId;
-            Debug.Log($"[KartController] Got clientId from NetworkObject OwnerClientId: {clientId}");
         }
         
         if (clientId == 0 && IsOwner && NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
         {
             clientId = NetworkManager.Singleton.LocalClientId;
-            Debug.Log($"[KartController] Got clientId from LocalClientId: {clientId}");
         }
         
         if (clientId == 0 && playerNetObj != null && NetworkManager.Singleton != null)
@@ -395,7 +381,6 @@ public class KartController : NetworkBehaviour
                 if (client.Value.PlayerObject == playerNetObj)
                 {
                     clientId = client.Key;
-                    Debug.Log($"[KartController] Got clientId from ConnectedClients: {clientId}");
                     break;
                 }
             }
@@ -408,7 +393,6 @@ public class KartController : NetworkBehaviour
                 if (client.Value.PlayerObject != null && client.Value.PlayerObject == playerNetObj)
                 {
                     clientId = client.Key;
-                    Debug.Log($"[KartController] Got clientId on server from ConnectedClients: {clientId}");
                     break;
                 }
             }
@@ -420,7 +404,6 @@ public class KartController : NetworkBehaviour
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.ConnectedClientsIds.Count > 0)
             {
                 clientId = NetworkManager.Singleton.ConnectedClientsIds[0];
-                Debug.Log($"[KartController] Using fallback clientId: {clientId}");
             }
             else
             {
@@ -434,8 +417,6 @@ public class KartController : NetworkBehaviour
             Debug.LogWarning($"[KartController] No character prefab selected for client {clientId}");
             return;
         }
-        
-        Debug.Log($"[KartController] Selected character prefab: {selectedCharacterPrefab.name} for client {clientId}");
         
         SpawnDriverModel(selectedCharacterPrefab, clientId);
     }
@@ -466,8 +447,6 @@ public class KartController : NetworkBehaviour
             
             currentDriverModel.transform.localPosition = driverModelPositionOffset;
             currentDriverModel.transform.localRotation = Quaternion.Euler(driverModelRotationOffset);
-            
-            Debug.Log($"[KartController] Driver model spawned - Parent: {driverModelParent.name}, LocalPos: {currentDriverModel.transform.localPosition}, WorldPos: {currentDriverModel.transform.position}, ParentWorldPos: {driverModelParent.position}, ParentLocalPos: {driverModelParent.localPosition}, Offset: {driverModelPositionOffset}");
             
             NetworkObject driverNetObj = currentDriverModel.GetComponent<NetworkObject>();
             if (driverNetObj != null) Destroy(driverNetObj);
@@ -521,11 +500,8 @@ public class KartController : NetworkBehaviour
                 {
                     input.enabled = false;
                     input.DeactivateInput();
-                    Debug.Log($"[KartController] Disabled PlayerInput on non-local driver model: {input.gameObject.name}");
                 }
             }
-            
-            Debug.Log($"[KartController] Successfully spawned driver model '{driverModelFromPrefab.name}' for client {clientId} under {driverModelParent.name} at position {currentDriverModel.transform.localPosition}");
         }
         else
         {
@@ -558,30 +534,24 @@ public class KartController : NetworkBehaviour
     {
         if (!IsOwner)
         {
-            Debug.Log("[KartController] Not Owner, skipping camera switch");
             return;
         }
-        
-        Debug.Log("[KartController] Switching camera: driving -> finish line");
         
         // Disable both driving cameras
         if (drivingCameraFront != null)
         {
             drivingCameraFront.gameObject.SetActive(false);
-            Debug.Log($"[KartController] Disabled driving front camera: {drivingCameraFront.name}");
         }
         
         if (drivingCameraBack != null)
         {
             drivingCameraBack.gameObject.SetActive(false);
-            Debug.Log($"[KartController] Disabled driving back camera: {drivingCameraBack.name}");
         }
         
         if (finishLineCamera != null)
         {
             finishLineCamera.gameObject.SetActive(true);
             finishLineCamera.enabled = true;
-            Debug.Log($"[KartController] Enabled finish line camera: {finishLineCamera.name}");
         }
         else
         {
@@ -592,10 +562,7 @@ public class KartController : NetworkBehaviour
         if (localPlayerSetup != null)
         {
             localPlayerSetup.UpdateCameraReference(finishLineCamera);
-            Debug.Log("[KartController] Updated LocalPlayerSetup camera reference");
         }
-        
-        Debug.Log("[KartController] Camera switch complete");
     }
     
     public void OnSwitchCamera(InputValue value)
@@ -676,7 +643,6 @@ public class KartController : NetworkBehaviour
             drivingCameraFront.Priority = savedFrontCameraPriority;
             drivingCameraFront.gameObject.SetActive(true);
             drivingCameraFront.enabled = true;
-            Debug.Log($"[KartController] Initialized with front camera (Priority: {savedFrontCameraPriority})");
         }
         else if (drivingCameraBack != null)
         {
@@ -684,7 +650,6 @@ public class KartController : NetworkBehaviour
             drivingCameraBack.gameObject.SetActive(true);
             drivingCameraBack.enabled = true;
             isFrontCamera = false;
-            Debug.Log($"[KartController] Front camera not set, using back camera as fallback (Priority: {savedBackCameraPriority})");
         }
     }
     public CinemachineCamera GetActiveDrivingCamera()
@@ -729,7 +694,6 @@ public class KartController : NetworkBehaviour
             {
                 drivingCameraFront.gameObject.SetActive(true);
                 drivingCameraFront.enabled = true;
-                Debug.Log("[KartController] Switched to front camera");
             }
         }
         else
@@ -743,7 +707,6 @@ public class KartController : NetworkBehaviour
             {
                 drivingCameraBack.gameObject.SetActive(true);
                 drivingCameraBack.enabled = true;
-                Debug.Log("[KartController] Switched to back camera");
             }
         }
         
@@ -874,8 +837,6 @@ public class KartController : NetworkBehaviour
                     GetComponentInParent<AIKartController>() != null ||
                     transform.root.GetComponent<AIKartController>() != null;
         
-        Debug.Log($"[KartController] OnHitByProjectile on {gameObject.name}: isAI={isAI}, IsServer={IsServer}, IsOwner={IsOwner}");
-        
         if (isAI)
         {
             if (IsServer)
@@ -893,6 +854,30 @@ public class KartController : NetworkBehaviour
             ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
         }
     }
+    
+    public void OnHitByPopcorn(Vector3 hitDirection, float force, float torque, float stunDuration)
+    {
+        bool isAI = GetComponent<AIKartController>() != null || 
+                    GetComponentInParent<AIKartController>() != null ||
+                    transform.root.GetComponent<AIKartController>() != null;
+        
+        if (isAI)
+        {
+            if (IsServer)
+            {
+                ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
+            }
+            else
+            {
+                Debug.LogError($"[KartController] AI kart {gameObject.name} hit by popcorn but not on server! This should not happen.");
+            }
+        }
+        else
+        {
+            // Player: Use ClientRpc to let owner client apply effect
+            ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
+        }
+    }
    
     private void ApplyHitEffectOnServer(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
@@ -902,7 +887,6 @@ public class KartController : NetworkBehaviour
             return;
         }
         
-        Debug.Log($"[KartController] Applying hit effect to AI {gameObject.name} on server! force: {force}, direction: {hitDirection}");
         Rigidbody kartRb = GetComponent<Rigidbody>();
         if (kartRb == null)
         {
@@ -918,11 +902,9 @@ public class KartController : NetworkBehaviour
         }
         else
         {
-            Debug.Log($"[KartController] Found Rigidbody on {kartRb.gameObject.name} for AI {gameObject.name}");
             kartRb.linearVelocity = kartRb.linearVelocity * 0.3f;
             kartRb.AddForce(hitDirection * force, ForceMode.Impulse);
             kartRb.AddTorque(Vector3.up * torque, ForceMode.Impulse);
-            Debug.Log($"[KartController] Applied force {force} to AI {gameObject.name}");
         }
         
         StartCoroutine(StunCoroutine(stunDuration));
@@ -931,12 +913,8 @@ public class KartController : NetworkBehaviour
     [ClientRpc]
     private void ApplyProjectileHitClientRpc(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
-        Debug.Log($"[KartController] RPC Hit received on {gameObject.name}. IsOwner: {IsOwner}. Force: {force}");
-
         // Only owner executes physics effect (for player karts)
         if (!IsOwner) return;
-        
-        Debug.Log($"[KartController] Applying hit physics locally on Owner!");
         
         Rigidbody kartRb = GetComponent<Rigidbody>();
         if (kartRb != null)
@@ -958,12 +936,9 @@ public class KartController : NetworkBehaviour
         steer = Vector2.zero;
         drift = Vector2.zero;
         
-        Debug.Log($"[KartController] {gameObject.name} stunned for {duration} seconds");
-        
         yield return new WaitForSeconds(duration);
         
         controlsEnabled = originalEnabled;
-        Debug.Log($"[KartController] {gameObject.name} stun ended");
     }
     
      private System.Collections.IEnumerator ActivateInputAfterDelay()
@@ -1396,7 +1371,6 @@ public class KartController : NetworkBehaviour
             transform.rotation = respawnRot;
         }
         
-        Debug.Log($"[KartController] Respawned {gameObject.name} at {respawnPos} (backtracked ~{respawnBacktrackTime}s).");
     }
     
     private System.Collections.IEnumerator ReenableNetworkTransform(Unity.Netcode.Components.NetworkTransform netTransform)

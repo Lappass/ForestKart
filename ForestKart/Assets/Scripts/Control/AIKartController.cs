@@ -851,11 +851,8 @@ public class AIKartController : NetworkBehaviour
     private void ApplyControls()
     {
         if (kartController == null) return;
-        
-        // Check if stunned (when controlsEnabled = false, AI should also stop control)
         if (!kartController.controlsEnabled)
         {
-            // When stunned, stop all input
             kartController.gas = 0f;
             kartController.brake = 0f;
             kartController.steer = Vector2.zero;
