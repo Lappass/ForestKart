@@ -55,6 +55,7 @@ public class GameManager : NetworkBehaviour
     private float rankingUpdateTimer = 0f;
     private HashSet<NetworkObject> finishedPlayers = new HashSet<NetworkObject>();
     private Dictionary<NetworkObject, int> finishOrder = new Dictionary<NetworkObject, int>();
+    private Dictionary<NetworkObject, float> finishTime = new Dictionary<NetworkObject, float>();
     private int nextFinishOrder = 1;
     
     public static GameManager Instance { get; private set; }
@@ -82,6 +83,7 @@ public class GameManager : NetworkBehaviour
             showLeaderboard.Value = false;
             finishedPlayers.Clear();
             finishOrder.Clear();
+            finishTime.Clear();
             nextFinishOrder = 1;
         }
     }
@@ -683,6 +685,8 @@ public class GameManager : NetworkBehaviour
         Transform winnerTransform = null;
         bool foundNewFinisher = false;
         
+        List<(NetworkObject obj, float progress, bool isPlayer)> candidates = new List<(NetworkObject, float, bool)>();
+        
         foreach (var client in NetworkManager.Singleton.ConnectedClients)
         {
             if (client.Value.PlayerObject != null)
@@ -698,13 +702,8 @@ public class GameManager : NetworkBehaviour
                     NetworkObject playerObj = client.Value.PlayerObject;
                     if (!finishedPlayers.Contains(playerObj))
                     {
-                        finishedPlayers.Add(playerObj);
-                        finishOrder[playerObj] = nextFinishOrder++;
-                        foundNewFinisher = true;
-                        if (winnerTransform == null)
-                        {
-                            winnerTransform = playerObj.transform;
-                        }
+                        float progress = tracker.GetTotalProgress();
+                        candidates.Add((playerObj, progress, true));
                     }
                 }
             }
@@ -718,12 +717,35 @@ public class GameManager : NetworkBehaviour
                 NetworkObject aiObj = aiKart.GetComponent<NetworkObject>();
                 if (aiObj != null && !finishedPlayers.Contains(aiObj))
                 {
-                    finishedPlayers.Add(aiObj);
-                    finishOrder[aiObj] = nextFinishOrder++;
-                    foundNewFinisher = true;
-                    if (winnerTransform == null)
+                    float progress = aiKart.GetTotalProgress();
+                    candidates.Add((aiObj, progress, false));
+                }
+            }
+        }
+        
+        candidates.Sort((a, b) => b.progress.CompareTo(a.progress));
+        
+        foreach (var candidate in candidates)
+        {
+            if (!finishedPlayers.Contains(candidate.obj))
+            {
+                finishedPlayers.Add(candidate.obj);
+                finishOrder[candidate.obj] = nextFinishOrder++;
+                finishTime[candidate.obj] = Time.time;
+                foundNewFinisher = true;
+                if (winnerTransform == null)
+                {
+                    if (candidate.isPlayer)
                     {
-                        winnerTransform = aiKart.transform;
+                        winnerTransform = candidate.obj.transform;
+                    }
+                    else
+                    {
+                        AIKartController aiKart = candidate.obj.GetComponent<AIKartController>();
+                        if (aiKart != null)
+                        {
+                            winnerTransform = aiKart.transform;
+                        }
                     }
                 }
             }
@@ -914,16 +936,36 @@ public class GameManager : NetworkBehaviour
         
         entries.Sort((a, b) =>
         {
-            if (a.isFinished != b.isFinished)
-            {
-                return b.isFinished.CompareTo(a.isFinished);
-            }
+            bool aCompleted = a.lapCount >= totalLaps;
+            bool bCompleted = b.lapCount >= totalLaps;
             
-            if (a.isFinished && b.isFinished)
+            if (aCompleted && bCompleted)
             {
-                int orderA = finishOrder.ContainsKey(a.networkObject) ? finishOrder[a.networkObject] : int.MaxValue;
-                int orderB = finishOrder.ContainsKey(b.networkObject) ? finishOrder[b.networkObject] : int.MaxValue;
-                return orderA.CompareTo(orderB);
+                bool aHasOrder = finishOrder.ContainsKey(a.networkObject);
+                bool bHasOrder = finishOrder.ContainsKey(b.networkObject);
+                
+                if (aHasOrder && bHasOrder)
+                {
+                    int orderA = finishOrder[a.networkObject];
+                    int orderB = finishOrder[b.networkObject];
+                    return orderA.CompareTo(orderB);
+                }
+                
+                if (aHasOrder && !bHasOrder)
+                {
+                    return -1;
+                }
+                
+                if (!aHasOrder && bHasOrder)
+                {
+                    return 1;
+                }
+                
+                float progressDiff = b.progress - a.progress;
+                if (Mathf.Abs(progressDiff) > 0.0001f)
+                {
+                    return progressDiff > 0 ? 1 : -1;
+                }
             }
             
             if (a.lapCount != b.lapCount)
@@ -931,10 +973,10 @@ public class GameManager : NetworkBehaviour
                 return b.lapCount.CompareTo(a.lapCount);
             }
             
-            float progressDiff = b.progress - a.progress;
-            if (Mathf.Abs(progressDiff) > 0.0001f)
+            float progressDiff2 = b.progress - a.progress;
+            if (Mathf.Abs(progressDiff2) > 0.0001f)
             {
-                return progressDiff > 0 ? 1 : -1;
+                return progressDiff2 > 0 ? 1 : -1;
             }
             
             if (a.networkObject != null && b.networkObject != null)

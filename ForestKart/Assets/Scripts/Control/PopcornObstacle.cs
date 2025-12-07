@@ -131,6 +131,15 @@ public class PopcornObstacle : NetworkBehaviour
     {
         if (kart == null) return;
         
+        if (GameManager.Instance != null)
+        {
+            float countdownTime = GameManager.Instance.GetCountdownTime();
+            if (countdownTime > 0f || !GameManager.Instance.IsGameStarted())
+            {
+                return;
+            }
+        }
+        
         Vector3 hitDirection;
         if (overrideDirection.HasValue)
         {
