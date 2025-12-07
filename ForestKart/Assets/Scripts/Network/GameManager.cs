@@ -20,21 +20,15 @@ public class GameManager : NetworkBehaviour
     public Camera introCamera2;
     public float intro1Duration = 1f;
     public float intro2Duration = 1f;
-    [Tooltip("Camera 1 movement direction (normalized). Default: negative Y axis (down)")]
     public Vector3 camera1MoveDirection = new Vector3(0f, -1f, 0f);
-    [Tooltip("Camera 1 total movement distance")]
     public float camera1MoveDistance = 20f;
-    [Tooltip("Camera 2 arc height (Y offset for the arc midpoint). Positive = upward arc")]
     public float camera2ArcHeight = 5f;
-    [Tooltip("Camera 2 arc forward distance (how far forward the arc goes)")]
     public float camera2ArcForwardDistance = 10f;
     
     [Header("Spawn Settings")]
     public SplineContainer raceTrack;
     public int totalKartCount = 21;
     public float spawnSpacing = 3f;
-    
-    [Tooltip("Spawn points list (optional). If set, will use these points instead of spacing")]
     public Transform[] spawnPoints;
     
     [Header("Countdown")]
@@ -55,6 +49,7 @@ public class GameManager : NetworkBehaviour
     private float rankingUpdateTimer = 0f;
     private HashSet<NetworkObject> finishedPlayers = new HashSet<NetworkObject>();
     private Dictionary<NetworkObject, int> finishOrder = new Dictionary<NetworkObject, int>();
+    private Dictionary<NetworkObject, float> finishTime = new Dictionary<NetworkObject, float>();
     private int nextFinishOrder = 1;
     
     public static GameManager Instance { get; private set; }
@@ -82,6 +77,7 @@ public class GameManager : NetworkBehaviour
             showLeaderboard.Value = false;
             finishedPlayers.Clear();
             finishOrder.Clear();
+            finishTime.Clear();
             nextFinishOrder = 1;
         }
     }
@@ -285,7 +281,6 @@ public class GameManager : NetworkBehaviour
     [ClientRpc]
     private void ActivatePlayerCamerasClientRpc()
     {
-        // Don't activate cameras if intro is still playing
         if (isPlayingIntro.Value)
         {
             Debug.Log("[GameManager] Intro is still playing, skipping camera activation in ActivatePlayerCamerasClientRpc");
@@ -350,8 +345,6 @@ public class GameManager : NetworkBehaviour
     private IEnumerator IntroSequenceCoroutine()
     {
         Debug.Log("[GameManager] IntroSequenceCoroutine started on client");
-        
-        // 1. Show Banner
         if (introBannerUI != null) introBannerUI.SetActive(true);
         else Debug.LogWarning("[GameManager] introBannerUI is null!");
         KartController localKart = null;
@@ -366,11 +359,8 @@ public class GameManager : NetworkBehaviour
                 waitTime += 0.1f;
             }
         }
-        
-        // Function to disable all driving cameras
         void DisableAllDrivingCameras()
         {
-            // Always check all karts to ensure we catch all players (especially in multiplayer)
             KartController[] allKarts = FindObjectsByType<KartController>(FindObjectsSortMode.None);
             foreach (KartController kart in allKarts)
             {
@@ -392,8 +382,6 @@ public class GameManager : NetworkBehaviour
                 }
             }
         }
-        
-        // Disable cameras initially
         DisableAllDrivingCameras();
         if (mainCamera == null)
         {
@@ -429,7 +417,6 @@ public class GameManager : NetworkBehaviour
             
             while (timer < intro1Duration)
             {
-                // Continuously disable driving cameras during intro
                 DisableAllDrivingCameras();
                 
                 float progress = timer / intro1Duration;
@@ -441,7 +428,7 @@ public class GameManager : NetworkBehaviour
             introCamera1.transform.position = startPos + normalizedDirection * camera1MoveDistance;
             Debug.Log($"[GameManager] Camera1 Final Position: {introCamera1.transform.position}");
             introCamera1.gameObject.SetActive(false);
-            introCamera1.depth = -1; // Reset depth
+            introCamera1.depth = -1;
         }
         if (introCamera2 != null)
         {
@@ -458,7 +445,6 @@ public class GameManager : NetworkBehaviour
             
             while (timer < intro2Duration)
             {
-                // Continuously disable driving cameras during intro
                 DisableAllDrivingCameras();
                 
                 float progress = timer / intro2Duration;
@@ -478,24 +464,19 @@ public class GameManager : NetworkBehaviour
         }
         if (introBannerUI != null) introBannerUI.SetActive(false);
         Debug.Log("[GameManager] Intro Sequence Finished locally.");
-        
-        // Wait a bit to ensure intro cameras are fully disabled
         yield return new WaitForSeconds(0.1f);
         
         localKart = GetLocalPlayerKart();
         if (localKart != null)
         {
-            // Force initialize cameras if they haven't been initialized yet
-            // This will be handled by InitializeCamerasAfterIntroCheck, but we can trigger it here too
             yield return new WaitForSeconds(0.1f);
             
             CinemachineCamera activeCamera = localKart.GetActiveDrivingCamera();
             if (activeCamera != null)
             {
-                // Force toggle: disable first, then enable
                 activeCamera.gameObject.SetActive(false);
                 activeCamera.enabled = false;
-                yield return null; // Wait one frame
+                yield return null; 
                 activeCamera.gameObject.SetActive(true);
                 activeCamera.enabled = true;
                 Debug.Log($"[GameManager] Re-enabled local player driving camera: {activeCamera.name}");
@@ -683,6 +664,8 @@ public class GameManager : NetworkBehaviour
         Transform winnerTransform = null;
         bool foundNewFinisher = false;
         
+        List<(NetworkObject obj, float progress, bool isPlayer)> candidates = new List<(NetworkObject, float, bool)>();
+        
         foreach (var client in NetworkManager.Singleton.ConnectedClients)
         {
             if (client.Value.PlayerObject != null)
@@ -693,17 +676,15 @@ public class GameManager : NetworkBehaviour
                     tracker = client.Value.PlayerObject.GetComponentInChildren<PlayerProgressTracker>();
                 }
                 
-                if (tracker != null && tracker.GetLapCount() >= totalLaps)
+                if (tracker != null)
                 {
-                    NetworkObject playerObj = client.Value.PlayerObject;
-                    if (!finishedPlayers.Contains(playerObj))
+                    if (tracker.GetLapCount() >= totalLaps || tracker.GetTotalProgress() >= totalLaps)
                     {
-                        finishedPlayers.Add(playerObj);
-                        finishOrder[playerObj] = nextFinishOrder++;
-                        foundNewFinisher = true;
-                        if (winnerTransform == null)
+                        NetworkObject playerObj = client.Value.PlayerObject;
+                        if (!finishedPlayers.Contains(playerObj))
                         {
-                            winnerTransform = playerObj.transform;
+                            float progress = tracker.GetTotalProgress();
+                            candidates.Add((playerObj, progress, true));
                         }
                     }
                 }
@@ -713,17 +694,43 @@ public class GameManager : NetworkBehaviour
         AIKartController[] aiKarts = FindObjectsByType<AIKartController>(FindObjectsSortMode.None);
         foreach (var aiKart in aiKarts)
         {
-            if (aiKart != null && aiKart.GetLapCount() >= totalLaps)
+            if (aiKart != null)
             {
-                NetworkObject aiObj = aiKart.GetComponent<NetworkObject>();
-                if (aiObj != null && !finishedPlayers.Contains(aiObj))
+                if (aiKart.GetLapCount() >= totalLaps || aiKart.GetTotalProgress() >= totalLaps)
                 {
-                    finishedPlayers.Add(aiObj);
-                    finishOrder[aiObj] = nextFinishOrder++;
-                    foundNewFinisher = true;
-                    if (winnerTransform == null)
+                    NetworkObject aiObj = aiKart.GetComponent<NetworkObject>();
+                    if (aiObj != null && !finishedPlayers.Contains(aiObj))
                     {
-                        winnerTransform = aiKart.transform;
+                        float progress = aiKart.GetTotalProgress();
+                        candidates.Add((aiObj, progress, false));
+                    }
+                }
+            }
+        }
+        
+        candidates.Sort((a, b) => b.progress.CompareTo(a.progress));
+        
+        foreach (var candidate in candidates)
+        {
+            if (!finishedPlayers.Contains(candidate.obj))
+            {
+                finishedPlayers.Add(candidate.obj);
+                finishOrder[candidate.obj] = nextFinishOrder++;
+                finishTime[candidate.obj] = Time.time;
+                foundNewFinisher = true;
+                if (winnerTransform == null)
+                {
+                    if (candidate.isPlayer)
+                    {
+                        winnerTransform = candidate.obj.transform;
+                    }
+                    else
+                    {
+                        AIKartController aiKart = candidate.obj.GetComponent<AIKartController>();
+                        if (aiKart != null)
+                        {
+                            winnerTransform = aiKart.transform;
+                        }
                     }
                 }
             }
@@ -914,16 +921,43 @@ public class GameManager : NetworkBehaviour
         
         entries.Sort((a, b) =>
         {
-            if (a.isFinished != b.isFinished)
-            {
-                return b.isFinished.CompareTo(a.isFinished);
-            }
+            bool aCompleted = a.lapCount >= totalLaps;
+            bool bCompleted = b.lapCount >= totalLaps;
             
-            if (a.isFinished && b.isFinished)
+            if (aCompleted && bCompleted)
             {
-                int orderA = finishOrder.ContainsKey(a.networkObject) ? finishOrder[a.networkObject] : int.MaxValue;
-                int orderB = finishOrder.ContainsKey(b.networkObject) ? finishOrder[b.networkObject] : int.MaxValue;
-                return orderA.CompareTo(orderB);
+                bool aHasTime = finishTime.ContainsKey(a.networkObject);
+                bool bHasTime = finishTime.ContainsKey(b.networkObject);
+                
+                if (aHasTime && bHasTime)
+                {
+                    return finishTime[a.networkObject].CompareTo(finishTime[b.networkObject]);
+                }
+                if (aHasTime && !bHasTime)
+                {
+                    if (b.progress > a.progress) return 1;
+                    return -1;
+                }
+                
+                if (!aHasTime && bHasTime)
+                {
+                    if (a.progress > b.progress) return -1;
+                    return 1;
+                }
+                bool aHasOrder = finishOrder.ContainsKey(a.networkObject);
+                bool bHasOrder = finishOrder.ContainsKey(b.networkObject);
+                
+                if (aHasOrder && bHasOrder)
+                {
+                    int orderA = finishOrder[a.networkObject];
+                    int orderB = finishOrder[b.networkObject];
+                    return orderA.CompareTo(orderB);
+                }
+                float progressDiff = b.progress - a.progress;
+                if (Mathf.Abs(progressDiff) > 0.0001f)
+                {
+                    return progressDiff > 0 ? 1 : -1;
+                }
             }
             
             if (a.lapCount != b.lapCount)
@@ -931,10 +965,10 @@ public class GameManager : NetworkBehaviour
                 return b.lapCount.CompareTo(a.lapCount);
             }
             
-            float progressDiff = b.progress - a.progress;
-            if (Mathf.Abs(progressDiff) > 0.0001f)
+            float progressDiff2 = b.progress - a.progress;
+            if (Mathf.Abs(progressDiff2) > 0.0001f)
             {
-                return progressDiff > 0 ? 1 : -1;
+                return progressDiff2 > 0 ? 1 : -1;
             }
             
             if (a.networkObject != null && b.networkObject != null)
@@ -1006,7 +1040,7 @@ public class GameManager : NetworkBehaviour
             
             if (tracker != null)
             {
-                return tracker.GetLapCount() >= totalLaps;
+                return tracker.GetLapCount() >= totalLaps || tracker.GetTotalProgress() >= totalLaps;
             }
         }
         
