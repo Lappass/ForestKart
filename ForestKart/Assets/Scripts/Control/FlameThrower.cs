@@ -5,6 +5,16 @@ public class FlameThrower : MonoBehaviour
 {
     private ParticleSystem flameParticles;
     private Transform fireTrigger;
+    private Collider triggerCollider;
+    
+    private float stateTimer;
+    private bool isFiring;
+
+    [Header("Timing Settings")]
+    public float minFireDuration = 2f;
+    public float maxFireDuration = 8f;
+    public float minCooldownDuration = 4f;
+    public float maxCooldownDuration = 10f;
 
     private void Start()
     {
@@ -16,23 +26,18 @@ public class FlameThrower : MonoBehaviour
             flameParticles = GetComponentInChildren<ParticleSystem>();
         }
 
-        if (flameParticles != null)
-        {
-            if (!flameParticles.isPlaying)
-            {
-                flameParticles.Play();
-            }
-        }
-        else
+        if (flameParticles == null)
         {
             Debug.LogWarning("[FlameThrower] No ParticleSystem found on object or children.");
         }
 
         // 2. Handle Fire Trigger
         // User stated: "It has a fireTrigger child object with a istrigger box collider"
-        fireTrigger = transform.Find("fireTrigger");
+        fireTrigger = transform.Find("FireTrigger");
         if (fireTrigger != null)
         {
+            triggerCollider = fireTrigger.GetComponent<Collider>();
+            
             var handler = fireTrigger.gameObject.GetComponent<FlameThrowerTriggerHandler>();
             if (handler == null)
             {
@@ -42,7 +47,58 @@ public class FlameThrower : MonoBehaviour
         }
         else
         {
-            Debug.LogError($"[FlameThrower] Could not find child object named 'fireTrigger' on {gameObject.name}");
+            Debug.LogError($"[FlameThrower] Could not find child object named 'FireTrigger' on {gameObject.name}");
+        }
+
+        // Start the cycle
+        StartFiring();
+    }
+
+    private void Update()
+    {
+        stateTimer -= Time.deltaTime;
+        if (stateTimer <= 0f)
+        {
+            if (isFiring)
+            {
+                StartCooldown();
+            }
+            else
+            {
+                StartFiring();
+            }
+        }
+    }
+
+    private void StartFiring()
+    {
+        isFiring = true;
+        stateTimer = Random.Range(minFireDuration, maxFireDuration);
+        
+        if (flameParticles != null) 
+        {
+            flameParticles.Play();
+        }
+        
+        if (triggerCollider != null) 
+        {
+            triggerCollider.enabled = true;
+        }
+    }
+
+    private void StartCooldown()
+    {
+        isFiring = false;
+        stateTimer = Random.Range(minCooldownDuration, maxCooldownDuration);
+        
+        if (flameParticles != null) 
+        {
+            flameParticles.Stop();
+        }
+        
+        if (triggerCollider != null) 
+        {
+            triggerCollider.enabled = false;
         }
     }
 
@@ -88,4 +144,3 @@ public class FlameThrowerTriggerHandler : MonoBehaviour
         }
     }
 }
-
