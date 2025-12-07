@@ -100,10 +100,24 @@ public class PopcornObstacle : NetworkBehaviour
             kart = collision.gameObject.GetComponentInChildren<KartController>();
         }
         
-        if (kart != null && !hasHitPlayer)
+        if (kart != null)
         {
-            hasHitPlayer = true;
-            HandleKartCollision(kart, collision);
+            // Check if game hasn't started or is in countdown
+            if (GameManager.Instance != null && (GameManager.Instance.GetCountdownTime() > 0f || !GameManager.Instance.IsGameStarted()))
+            {
+                // Ignore collision with the kart during countdown so it doesn't block/affect the car physically
+                if (col != null && collision.collider != null)
+                {
+                    Physics.IgnoreCollision(col, collision.collider, true);
+                }
+                return;
+            }
+            
+            if (!hasHitPlayer)
+            {
+                hasHitPlayer = true;
+                HandleKartCollision(kart, collision);
+            }
         }
     }
     

@@ -9,6 +9,9 @@ using UnityEngine.UI;
 
 public class GameManager : NetworkBehaviour
 {
+    [Header("Visual Effects")]
+    public Shader blurShader;
+
     [Header("Prefabs")]
     public GameObject playerPrefab;
     public GameObject aiKartPrefab;

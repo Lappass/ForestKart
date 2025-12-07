@@ -38,7 +38,20 @@ public class ScreenBlurEffect : MonoBehaviour
             mainCamera = FindAnyObjectByType<Camera>();
         }
         
-        Shader blurShader = Shader.Find("Custom/BlurShader");
+        Shader blurShader = null;
+        
+        // Try getting shader from GameManager first (for builds)
+        if (GameManager.Instance != null && GameManager.Instance.blurShader != null)
+        {
+            blurShader = GameManager.Instance.blurShader;
+        }
+        
+        // Fallback to Shader.Find (works in Editor, might fail in Build if not included)
+        if (blurShader == null)
+        {
+            blurShader = Shader.Find("Custom/BlurShader");
+        }
+        
         if (blurShader == null)
         {
             blurShader = Shader.Find("UI/Default");

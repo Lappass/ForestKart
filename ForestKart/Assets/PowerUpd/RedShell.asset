@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5cc34968b56117b47a1c370210830a33, type: 3}
   m_Name: RedShell
   m_EditorClassIdentifier: 
-  type: 4
+  type: 2
   powerUpName: Red Shell
   visualPrefab: {fileID: 3526805715088413272, guid: 9cb41ad767963434d954b195848e982f, type: 3}
   attachOffset: {x: 0, y: 0.5, z: -1}
   redShellPrefab: {fileID: 3526805715088413272, guid: 9cb41ad767963434d954b195848e982f, type: 3}
   shellSpeed: 75
-  hitForce: 3000
+  hitForce: 5000
   stunDuration: 2
-  trackingRange: 100
+  trackingRange: 200
