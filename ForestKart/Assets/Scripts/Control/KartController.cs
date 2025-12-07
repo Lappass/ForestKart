@@ -1220,7 +1220,7 @@ public class KartController : NetworkBehaviour
         }
     }
 
-    private void RespawnKart()
+    public void RespawnKart()
     {
         offTrackTimer = 0f;
         respawnGracePeriod = 1.0f;
