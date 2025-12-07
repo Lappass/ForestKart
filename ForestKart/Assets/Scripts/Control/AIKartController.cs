@@ -40,14 +40,14 @@ public class AIKartController : NetworkBehaviour
     [Header("Stability Control")]
     public bool enableStabilityControl = true;
     
-    [Range(0f, 10f)]
-    public float angularDamping = 3f;
-    
     [Range(0f, 20f)]
-    public float lateralCorrection = 10f;
+    public float angularDamping = 6f;
     
-    [Range(0f, 15f)]
-    public float alignmentForce = 8f;
+    [Range(0f, 40f)]
+    public float lateralCorrection = 15f;
+    
+    [Range(0f, 30f)]
+    public float alignmentForce = 12f;
     
     [Header("Randomness")]
     public float speedVariation = 0.15f;

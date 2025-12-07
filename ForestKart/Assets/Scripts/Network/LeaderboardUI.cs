@@ -111,6 +111,7 @@ public class LeaderboardUI : MonoBehaviour
         {
             leaderboardPanel.SetActive(true);
             isShowing = true;
+            UpdateLeaderboard();
         }
     }
     
