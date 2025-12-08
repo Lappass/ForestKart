@@ -7,7 +7,6 @@ public class PlayerMovement : NetworkBehaviour
 
     void Update()
     {
-        // Only allow movement for the local player
         if (!IsOwner) return;
         transform.position += new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")) * (moveSpeed * Time.deltaTime);
     }

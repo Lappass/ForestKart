@@ -7,6 +7,8 @@ using UnityEngine.UI;
 using UnityEngine.Rendering.Universal;
 using Unity.Netcode;
 using Unity.Cinemachine;
+using UnityEngine.Splines;
+using Unity.Mathematics;
 
 public class KartController : NetworkBehaviour
 {
@@ -17,8 +19,8 @@ public class KartController : NetworkBehaviour
     public WheelCollider[] driveWheels;
     public GameObject[] driveWheelMeshes;
     private Quaternion[] wheelMeshInitialRotations;
-    private Quaternion[] rearWheelInitialLocalRotations; // Store initial rotation relative to car body for rear wheels
-    private float[] rearWheelRollingAngles; // Accumulate rolling angle for rear wheels
+    private Quaternion[] rearWheelInitialLocalRotations;
+    private float[] rearWheelRollingAngles;
     private bool wheelRotationsInitialized = false;
     public float DriveTorque = 100;
     public float BrakeTorque = 500;
@@ -42,11 +44,33 @@ public class KartController : NetworkBehaviour
     public float maxSpeed = 0f;
     
     [Header("Spline Speed Penalty")]
-    [Tooltip("Enable speed penalty when not on spline")]
     public bool enableSplineSpeedPenalty = true;
+
+    [Header("Respawn Settings")]
+    public bool enableRespawn = true;
+    public float respawnDelay = 3f;
+    public float fallRespawnY = -10f;
+    public float respawnBacktrackTime = 2.0f;
+    
+    private struct PositionSnapshot
+    {
+        public Vector3 position;
+        public Quaternion rotation;
+        public float timestamp;
+    }
+    
+    private List<PositionSnapshot> validPositionHistory = new List<PositionSnapshot>();
+    private float snapshotInterval = 0.2f;
+    private float lastSnapshotTime = 0f;
+    private float offTrackTimer = 0f;
+    private float respawnGracePeriod = 0f;
+
+    private float inputGas = 0f;
+    private bool inputBrake = false;
+    private bool isAI = false;
     
     [Tooltip("Layer mask for detecting spline. If set to Nothing, no speed penalty will be applied")]
-    public LayerMask splineLayer = 1 << 0; // Default layer
+    public LayerMask splineLayer = 1 << 0;
     
     [Tooltip("Detection distance (downward raycast distance)")]
     public float detectionDistance = 5f;
@@ -63,8 +87,16 @@ public class KartController : NetworkBehaviour
     public float speedPenaltySmoothing = 2f;
     
     [Header("Camera Settings")]
-    public CinemachineCamera drivingCamera;
+    public CinemachineCamera drivingCameraFront;
+    public CinemachineCamera drivingCameraBack;
     public CinemachineCamera finishLineCamera;
+    
+    [Tooltip("Current driving camera view (true = front, false = back)")]
+    private bool isFrontCamera = true;
+    
+    private bool camerasInitialized = false;
+    private int savedFrontCameraPriority = 10;
+    private int savedBackCameraPriority = 10;
     
     [Header("Character Model")]
     [Tooltip("Transform where the selected driver/character model should be instantiated. Driver model will be spawned here based on player selection.")]
@@ -83,6 +115,28 @@ public class KartController : NetworkBehaviour
     private float originalDriveTorque;
     private float originalMaxSpeed;
     
+    void Awake()
+    {
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
+        if (playerInput != null)
+        {
+            playerInput.enabled = false;
+            playerInput.DeactivateInput();
+        }
+        if (drivingCameraFront != null)
+        {
+            drivingCameraFront.Priority = 0;
+            drivingCameraFront.enabled = false;
+            drivingCameraFront.gameObject.SetActive(false);
+        }
+        if (drivingCameraBack != null)
+        {
+            drivingCameraBack.Priority = 0;
+            drivingCameraBack.enabled = false;
+            drivingCameraBack.gameObject.SetActive(false);
+        }
+    }
+    
     void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -90,15 +144,32 @@ public class KartController : NetworkBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.maxAngularVelocity = 7f;
         
+        ConfigurePhysics();
+        
         if (maxSpeed <= 0f)
         {
-            maxSpeed = 50f;
+            maxSpeed = 100f;
         }
+        else
+        {
+            maxSpeed *= 1.6f;
+        }
+        
+        DriveTorque *= 2.0f;
+        Downforce *= 1.8f;
         
         originalDriveTorque = DriveTorque;
         originalMaxSpeed = maxSpeed;
         
-        // Initialize wheel mesh rotation offsets
+        isAI = GetComponent<AIKartController>() != null || GetComponentInParent<AIKartController>() != null;
+
+        validPositionHistory.Add(new PositionSnapshot 
+        { 
+            position = transform.position, 
+            rotation = transform.rotation, 
+            timestamp = Time.time 
+        });
+        
         if (driveWheels != null && driveWheelMeshes != null)
         {
             if (driveWheels.Length != driveWheelMeshes.Length)
@@ -114,7 +185,6 @@ public class KartController : NetworkBehaviour
             {
                 if (i < driveWheels.Length && driveWheels[i] != null && driveWheelMeshes[i] != null)
                 {
-                    // Get initial world rotation of wheel collider
                     Vector3 wheelPos;
                     Quaternion wheelRot;
                     driveWheels[i].GetWorldPose(out wheelPos, out wheelRot);
@@ -123,24 +193,20 @@ public class KartController : NetworkBehaviour
                     {
                         rearWheelInitialLocalRotations[i] = Quaternion.Inverse(transform.rotation) * driveWheelMeshes[i].transform.rotation;
                         rearWheelRollingAngles[i] = 0f;
-                        Debug.Log($"[KartController] Initialized rear wheel {i} relative to body.");
                     }
                     else
                     {
                         wheelMeshInitialRotations[i] = driveWheelMeshes[i].transform.rotation * Quaternion.Inverse(wheelRot);
-                        Debug.Log($"[KartController] Initialized front wheel {i} rotation offset. Wheel: {driveWheels[i].name}, Mesh: {driveWheelMeshes[i].name}");
                     }
                 }
                 else
                 {
-                    Debug.LogWarning($"[KartController] Wheel {i} or its mesh is null! Skipping rotation offset initialization.");
                 }
             }
             wheelRotationsInitialized = true;
         }
         else
         {
-            Debug.LogWarning("[KartController] driveWheels or driveWheelMeshes is null! Cannot initialize wheel rotation offsets.");
         }
         
         if (taillight != null)
@@ -151,6 +217,55 @@ public class KartController : NetworkBehaviour
         if (!hasBeenEnabled)
         {
             controlsEnabled = false;
+        }
+        if (drivingCameraFront != null)
+        {
+            drivingCameraFront.Priority = 0;
+            drivingCameraFront.enabled = false;
+            drivingCameraFront.gameObject.SetActive(false);
+        }
+        if (drivingCameraBack != null)
+        {
+            drivingCameraBack.Priority = 0;
+            drivingCameraBack.enabled = false;
+            drivingCameraBack.gameObject.SetActive(false);
+        }
+    }
+    
+    private void ConfigurePhysics()
+    {
+        PhysicsMaterial bouncyMat = new PhysicsMaterial("KartBouncy");
+        bouncyMat.bounciness = 0.8f;
+        bouncyMat.bounceCombine = PhysicsMaterialCombine.Maximum;
+        bouncyMat.dynamicFriction = 0.6f;
+        bouncyMat.staticFriction = 0.6f;
+        
+        Collider col = GetComponent<Collider>();
+        if (col != null)
+        {
+            col.sharedMaterial = bouncyMat;
+        }
+        
+        if (rb != null)
+        {
+            rb.mass *= 2f;
+        }
+        
+        if (driveWheels != null)
+        {
+            foreach (var wheel in driveWheels)
+            {
+                if (wheel != null)
+                {
+                    WheelFrictionCurve forward = wheel.forwardFriction;
+                    forward.stiffness *= 1.5f;
+                    wheel.forwardFriction = forward;
+                    
+                    WheelFrictionCurve sideways = wheel.sidewaysFriction;
+                    sideways.stiffness *= 1.3f;
+                    wheel.sidewaysFriction = sideways;
+                }
+            }
         }
     }
     
@@ -173,15 +288,30 @@ public class KartController : NetworkBehaviour
         
         if (IsOwner)
         {
+            StartCoroutine(InitializeCamerasAfterIntroCheck());
             StartCoroutine(WaitForPositionSync());
             StartCoroutine(SetupPlayerInputDelayed());
         }
         else
         {
-            UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+            UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
             if (playerInput != null)
             {
                 playerInput.enabled = false;
+                playerInput.DeactivateInput();
+            }
+            
+            if (drivingCameraFront != null)
+            {
+                drivingCameraFront.Priority = 0;
+                drivingCameraFront.enabled = false;
+                drivingCameraFront.gameObject.SetActive(false);
+            }
+            if (drivingCameraBack != null)
+            {
+                drivingCameraBack.Priority = 0;
+                drivingCameraBack.enabled = false;
+                drivingCameraBack.gameObject.SetActive(false);
             }
         }
     }
@@ -190,15 +320,11 @@ public class KartController : NetworkBehaviour
     {
         yield return new WaitForSeconds(0.5f);
         
-        Debug.Log("[KartController] Attempting to spawn driver model...");
-        
         ReplaceKartModel();
     }
     
     private void ReplaceKartModel()
     {
-        Debug.Log("[KartController] ReplaceKartModel called");
-        
         if (CharacterSelectionUI.Instance == null)
         {
             Debug.LogWarning("[KartController] CharacterSelectionUI.Instance is null!");
@@ -211,21 +337,17 @@ public class KartController : NetworkBehaviour
             return;
         }
         
-        Debug.Log("[KartController] CharacterSelectionUI and NetworkManager found");
-        
         ulong clientId = 0;
         NetworkObject playerNetObj = GetComponentInParent<NetworkObject>();
         
         if (playerNetObj != null && playerNetObj.IsSpawned)
         {
             clientId = playerNetObj.OwnerClientId;
-            Debug.Log($"[KartController] Got clientId from NetworkObject OwnerClientId: {clientId}");
         }
         
         if (clientId == 0 && IsOwner && NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null)
         {
             clientId = NetworkManager.Singleton.LocalClientId;
-            Debug.Log($"[KartController] Got clientId from LocalClientId: {clientId}");
         }
         
         if (clientId == 0 && playerNetObj != null && NetworkManager.Singleton != null)
@@ -235,7 +357,6 @@ public class KartController : NetworkBehaviour
                 if (client.Value.PlayerObject == playerNetObj)
                 {
                     clientId = client.Key;
-                    Debug.Log($"[KartController] Got clientId from ConnectedClients: {clientId}");
                     break;
                 }
             }
@@ -248,7 +369,6 @@ public class KartController : NetworkBehaviour
                 if (client.Value.PlayerObject != null && client.Value.PlayerObject == playerNetObj)
                 {
                     clientId = client.Key;
-                    Debug.Log($"[KartController] Got clientId on server from ConnectedClients: {clientId}");
                     break;
                 }
             }
@@ -260,7 +380,6 @@ public class KartController : NetworkBehaviour
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.ConnectedClientsIds.Count > 0)
             {
                 clientId = NetworkManager.Singleton.ConnectedClientsIds[0];
-                Debug.Log($"[KartController] Using fallback clientId: {clientId}");
             }
             else
             {
@@ -274,8 +393,6 @@ public class KartController : NetworkBehaviour
             Debug.LogWarning($"[KartController] No character prefab selected for client {clientId}");
             return;
         }
-        
-        Debug.Log($"[KartController] Selected character prefab: {selectedCharacterPrefab.name} for client {clientId}");
         
         SpawnDriverModel(selectedCharacterPrefab, clientId);
     }
@@ -307,8 +424,6 @@ public class KartController : NetworkBehaviour
             currentDriverModel.transform.localPosition = driverModelPositionOffset;
             currentDriverModel.transform.localRotation = Quaternion.Euler(driverModelRotationOffset);
             
-            Debug.Log($"[KartController] Driver model spawned - Parent: {driverModelParent.name}, LocalPos: {currentDriverModel.transform.localPosition}, WorldPos: {currentDriverModel.transform.position}, ParentWorldPos: {driverModelParent.position}, ParentLocalPos: {driverModelParent.localPosition}, Offset: {driverModelPositionOffset}");
-            
             NetworkObject driverNetObj = currentDriverModel.GetComponent<NetworkObject>();
             if (driverNetObj != null) Destroy(driverNetObj);
             
@@ -329,7 +444,8 @@ public class KartController : NetworkBehaviour
             if (animator != null)
             {
                 animator.applyRootMotion = false;
-                animator.enabled = false;
+                animator.enabled = true;
+                animator.Play("drive");
             }
             
             currentDriverModel.transform.localPosition = driverModelPositionOffset;
@@ -352,8 +468,16 @@ public class KartController : NetworkBehaviour
                 driverKartController.enabled = false;
                 Destroy(driverKartController);
             }
-            
-            Debug.Log($"[KartController] Successfully spawned driver model '{driverModelFromPrefab.name}' for client {clientId} under {driverModelParent.name} at position {currentDriverModel.transform.localPosition}");
+
+            if (!IsOwner)
+            {
+                var playerInputs = currentDriverModel.GetComponentsInChildren<UnityEngine.InputSystem.PlayerInput>(true);
+                foreach (var input in playerInputs)
+                {
+                    input.enabled = false;
+                    input.DeactivateInput();
+                }
+            }
         }
         else
         {
@@ -386,27 +510,23 @@ public class KartController : NetworkBehaviour
     {
         if (!IsOwner)
         {
-            Debug.Log("[KartController] Not Owner, skipping camera switch");
             return;
         }
         
-        Debug.Log("[KartController] Switching camera: driving -> finish line");
-        
-        if (drivingCamera != null)
+        if (drivingCameraFront != null)
         {
-            drivingCamera.gameObject.SetActive(false);
-            Debug.Log($"[KartController] Disabled driving camera: {drivingCamera.name}");
+            drivingCameraFront.gameObject.SetActive(false);
         }
-        else
+        
+        if (drivingCameraBack != null)
         {
-            Debug.LogWarning("[KartController] Driving camera not found!");
+            drivingCameraBack.gameObject.SetActive(false);
         }
         
         if (finishLineCamera != null)
         {
             finishLineCamera.gameObject.SetActive(true);
             finishLineCamera.enabled = true;
-            Debug.Log($"[KartController] Enabled finish line camera: {finishLineCamera.name}");
         }
         else
         {
@@ -417,17 +537,163 @@ public class KartController : NetworkBehaviour
         if (localPlayerSetup != null)
         {
             localPlayerSetup.UpdateCameraReference(finishLineCamera);
-            Debug.Log("[KartController] Updated LocalPlayerSetup camera reference");
+        }
+    }
+    
+    public void OnSwitchCamera(InputValue value)
+    {
+        if (!IsOwner || !controlsEnabled) return;
+        
+        if (value.isPressed)
+        {
+            SwitchCamera();
+        }
+    }
+    private System.Collections.IEnumerator InitializeCamerasAfterIntroCheck()
+    {
+        yield return null;
+        
+        if (drivingCameraFront != null)
+        {
+            savedFrontCameraPriority = drivingCameraFront.Priority;
+        }
+        if (drivingCameraBack != null)
+        {
+            savedBackCameraPriority = drivingCameraBack.Priority;
+        }
+        if (drivingCameraFront != null)
+        {
+            drivingCameraFront.Priority = 0;
+            drivingCameraFront.gameObject.SetActive(false);
+            drivingCameraFront.enabled = false;
+        }
+        if (drivingCameraBack != null)
+        {
+            drivingCameraBack.Priority = 0; 
+            drivingCameraBack.gameObject.SetActive(false);
+            drivingCameraBack.enabled = false;
+        }
+        bool isIntroPlaying = false;
+        if (GameManager.Instance != null)
+        {
+            isIntroPlaying = GameManager.Instance.IsPlayingIntro();
         }
         
-        Debug.Log("[KartController] Camera switch complete");
+        if (isIntroPlaying)
+        {
+            while (GameManager.Instance != null && GameManager.Instance.IsPlayingIntro())
+            {
+                if (drivingCameraFront != null)
+                {
+                    drivingCameraFront.Priority = 0;
+                    drivingCameraFront.gameObject.SetActive(false);
+                    drivingCameraFront.enabled = false;
+                }
+                if (drivingCameraBack != null)
+                {
+                    drivingCameraBack.Priority = 0;
+                    drivingCameraBack.gameObject.SetActive(false);
+                    drivingCameraBack.enabled = false;
+                }
+                yield return new WaitForSeconds(0.1f);
+            }
+            yield return new WaitForSeconds(0.2f);
+        }
+        InitializeDrivingCameras();
+    }
+    private void InitializeDrivingCameras()
+    {
+        isFrontCamera = true;
+        camerasInitialized = true;
+        if (drivingCameraBack != null)
+        {
+            drivingCameraBack.Priority = savedBackCameraPriority;
+            drivingCameraBack.gameObject.SetActive(false);
+        }
+        if (drivingCameraFront != null)
+        {
+            drivingCameraFront.Priority = savedFrontCameraPriority;
+            drivingCameraFront.gameObject.SetActive(true);
+            drivingCameraFront.enabled = true;
+        }
+        else if (drivingCameraBack != null)
+        {
+            drivingCameraBack.Priority = savedBackCameraPriority;
+            drivingCameraBack.gameObject.SetActive(true);
+            drivingCameraBack.enabled = true;
+            isFrontCamera = false;
+        }
+    }
+    public CinemachineCamera GetActiveDrivingCamera()
+    {
+        if (!camerasInitialized)
+        {
+            return null;
+        }
+        
+        if (GameManager.Instance != null && GameManager.Instance.IsPlayingIntro())
+        {
+            return null;
+        }
+        
+        if (isFrontCamera && drivingCameraFront != null)
+        {
+            return drivingCameraFront;
+        }
+        else if (!isFrontCamera && drivingCameraBack != null)
+        {
+            return drivingCameraBack;
+        }
+        return drivingCameraFront != null ? drivingCameraFront : drivingCameraBack;
+    }
+    
+    private void SwitchCamera()
+    {
+        if (!IsOwner) return;
+        
+        isFrontCamera = !isFrontCamera;
+        
+        if (isFrontCamera)
+        {
+            if (drivingCameraBack != null)
+            {
+                drivingCameraBack.gameObject.SetActive(false);
+            }
+            if (drivingCameraFront != null)
+            {
+                drivingCameraFront.gameObject.SetActive(true);
+                drivingCameraFront.enabled = true;
+            }
+        }
+        else
+        {
+            if (drivingCameraFront != null)
+            {
+                drivingCameraFront.gameObject.SetActive(false);
+            }
+            if (drivingCameraBack != null)
+            {
+                drivingCameraBack.gameObject.SetActive(true);
+                drivingCameraBack.enabled = true;
+            }
+        }
+        
+        var localPlayerSetup = GetComponentInParent<LocalPlayerSetup>();
+        if (localPlayerSetup != null)
+        {
+            CinemachineCamera activeCamera = GetActiveDrivingCamera();
+            if (activeCamera != null)
+            {
+                localPlayerSetup.UpdateCameraReference(activeCamera);
+            }
+        }
     }
     
     private System.Collections.IEnumerator SetupPlayerInputDelayed()
     {
         yield return new WaitForSeconds(0.1f);
         
-        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             playerInput.enabled = true;
@@ -449,10 +715,68 @@ public class KartController : NetworkBehaviour
             UpdateSplineSpeedPenalty();
         }
         
+        if (enableRespawn)
+        {
+            UpdateRespawnLogic();
+        }
+        
+        if (!isAI && controlsEnabled)
+        {
+            UpdatePlayerControls();
+        }
+
         Drive(gas, brake,steer,drift);
+    }
+    
+    private void FixedUpdate()
+    {
+        if (!controlsEnabled) return;
         AddDownForce();
     }
     
+    private void UpdatePlayerControls()
+    {
+        if (inputBrake)
+        {
+            float forwardSpeed = transform.InverseTransformDirection(rb.linearVelocity).z;
+            
+            if (forwardSpeed > 1.0f)
+            {
+                brake = 1f;
+                reverse = false;
+                gas = inputGas; 
+            }
+            else
+            {
+                brake = 0f;
+                reverse = true;
+                gas = 1f; 
+            }
+        }
+        else
+        {
+            brake = 0f;
+            reverse = false;
+            gas = inputGas;
+        }
+        
+        if (taillight != null)
+        {
+            if (inputBrake)
+                taillight.GetComponent<Renderer>().material.EnableKeyword("_EMISSION");
+            else
+                taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
+        }
+        
+        if (BrakeAssist)
+        {
+             if (brake > 0)
+                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+             else
+                rb.constraints = RigidbodyConstraints.None;
+        }
+    }
+
     public void EnableControls()
     {
         hasBeenEnabled = true;
@@ -464,11 +788,146 @@ public class KartController : NetworkBehaviour
         }
     }
     
-    private System.Collections.IEnumerator ActivateInputAfterDelay()
+    public void OnHitByProjectile(Vector3 hitDirection, float force, float torque, float stunDuration)
+    {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
+        bool isAI = GetComponent<AIKartController>() != null || 
+                    GetComponentInParent<AIKartController>() != null ||
+                    transform.root.GetComponent<AIKartController>() != null;
+        
+        if (isAI)
+        {
+            if (IsServer)
+            {
+                ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
+            }
+            else
+            {
+                Debug.LogError($"[KartController] AI kart {gameObject.name} hit but not on server! This should not happen.");
+            }
+        }
+        else
+        {
+            ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
+        }
+    }
+    
+    public void OnEnterWaterPuddle(float blurDuration)
+    {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
+        if (!IsOwner) return;
+        
+        AIKartController aiController = GetComponent<AIKartController>();
+        if (aiController != null) return;
+        
+        if (ScreenBlurEffect.Instance != null)
+        {
+            ScreenBlurEffect.Instance.ApplyBlur(blurDuration);
+        }
+    }
+    
+    public void OnHitByPopcorn(Vector3 hitDirection, float force, float torque, float stunDuration)
+    {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
+        bool isAI = GetComponent<AIKartController>() != null || 
+                    GetComponentInParent<AIKartController>() != null ||
+                    transform.root.GetComponent<AIKartController>() != null;
+        
+        if (isAI)
+        {
+            if (IsServer)
+            {
+                ApplyHitEffectOnServer(hitDirection, force, torque, stunDuration);
+            }
+            else
+            {
+                Debug.LogError($"[KartController] AI kart {gameObject.name} hit by popcorn but not on server! This should not happen.");
+            }
+        }
+        else
+        {
+            ApplyProjectileHitClientRpc(hitDirection, force, torque, stunDuration);
+        }
+    }
+   
+    private void ApplyHitEffectOnServer(Vector3 hitDirection, float force, float torque, float stunDuration)
+    {
+        if (!IsServer)
+        {
+            Debug.LogError($"[KartController] ApplyHitEffectOnServer called on non-server for {gameObject.name}!");
+            return;
+        }
+        
+        Rigidbody kartRb = GetComponent<Rigidbody>();
+        if (kartRb == null)
+        {
+            kartRb = GetComponentInParent<Rigidbody>();
+        }
+        if (kartRb == null)
+        {
+            kartRb = transform.root.GetComponent<Rigidbody>();
+        }
+        if (kartRb == null)
+        {
+            Debug.LogError($"[KartController] Could not find Rigidbody on AI {gameObject.name} (checked self, parent, root)!");
+        }
+        else
+        {
+            kartRb.linearVelocity = kartRb.linearVelocity * 0.3f;
+            kartRb.AddForce(hitDirection * force, ForceMode.Impulse);
+            kartRb.AddTorque(Vector3.up * torque, ForceMode.Impulse);
+        }
+        
+        StartCoroutine(StunCoroutine(stunDuration));
+    }
+    
+    [ClientRpc]
+    private void ApplyProjectileHitClientRpc(Vector3 hitDirection, float force, float torque, float stunDuration)
+    {
+        if (!IsOwner) return;
+        
+        Rigidbody kartRb = GetComponent<Rigidbody>();
+        if (kartRb != null)
+        {
+            kartRb.linearVelocity = kartRb.linearVelocity * 0.3f;
+            kartRb.AddForce(hitDirection * force, ForceMode.Impulse);
+            kartRb.AddTorque(Vector3.up * torque, ForceMode.Impulse);
+        }
+        
+        StartCoroutine(StunCoroutine(stunDuration));
+    }
+    
+    private System.Collections.IEnumerator StunCoroutine(float duration)
+    {
+        bool originalEnabled = controlsEnabled;
+        controlsEnabled = false;
+        gas = 0f;
+        brake = 0f;
+        steer = Vector2.zero;
+        drift = Vector2.zero;
+        
+        yield return new WaitForSeconds(duration);
+        
+        controlsEnabled = originalEnabled;
+    }
+    
+     private System.Collections.IEnumerator ActivateInputAfterDelay()
     {
         yield return new WaitForSeconds(0.1f);
         
-        UnityEngine.InputSystem.PlayerInput playerInput = GetComponent<UnityEngine.InputSystem.PlayerInput>();
+        UnityEngine.InputSystem.PlayerInput playerInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (playerInput != null)
         {
             if (!playerInput.enabled)
@@ -505,37 +964,13 @@ public class KartController : NetworkBehaviour
     {
         if (!IsOwner || !controlsEnabled) return;
         
-        if (value.isPressed)
-        {
-            gas = 1;
-        }
-        if(!value.isPressed)
-        {
-            gas = 0;
-        }
+        inputGas = value.isPressed ? 1f : 0f;
     }
     public void OnBrake(InputValue value)
     {
         if (!IsOwner || !controlsEnabled) return;
         
-        if (value.isPressed)
-        {
-            brake = 1;
-            taillight.GetComponent<Renderer>().material.EnableKeyword("_EMISSION");
-            if (BrakeAssist)
-            {
-                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-            }
-        }
-        if (!value.isPressed)
-        {
-            brake = 0;
-            taillight.GetComponent<Renderer>().material.DisableKeyword("_EMISSION");
-            if (BrakeAssist)
-            {
-                rb.constraints = RigidbodyConstraints.None;
-            }
-        }
+        inputBrake = value.isPressed;
     }
     public void OnSteering(InputValue value)
     {
@@ -545,16 +980,6 @@ public class KartController : NetworkBehaviour
     }
     public void OnReverse(InputValue value)
     {
-        if (!IsOwner || !controlsEnabled) return;
-        
-        if (reverse)
-        {
-            reverse = false;
-        }
-        else
-        {
-            reverse = true; 
-        }
     }
     public void OnReset()
     {
@@ -568,6 +993,21 @@ public class KartController : NetworkBehaviour
         
         drift = value.Get<Vector2>().normalized;
     }
+    
+    public void OnUsePowerUp(InputValue value)
+    {
+        if (!IsOwner || !controlsEnabled) return;
+        
+        if (value.isPressed)
+        {
+            PowerUpSystem powerUpSystem = GetComponent<PowerUpSystem>();
+            if (powerUpSystem != null)
+            {
+                powerUpSystem.UsePowerUp();
+            }
+        }
+    }
+    
     private void Drive(float acceleration, float brake,Vector2 steer, Vector2 drift)
     {
         float effectiveMaxSpeed = maxSpeed * currentSpeedMultiplier;
@@ -584,13 +1024,6 @@ public class KartController : NetworkBehaviour
                 {
                     acceleration = 0f;
                 }
-            }
-            
-            if (horizontalSpeed > effectiveMaxSpeed)
-            {
-                Vector3 limitedVelocity = horizontalVelocity.normalized * effectiveMaxSpeed;
-                limitedVelocity.y = rb.linearVelocity.y;
-                rb.linearVelocity = limitedVelocity;
             }
         }
         
@@ -611,7 +1044,6 @@ public class KartController : NetworkBehaviour
             driveWheels[i].GetWorldPose(out wheelposition, out wheelrotation);
             driveWheelMeshes[i].transform.position = wheelposition;
             
-            // Apply rotation
             if (wheelRotationsInitialized)
             {
                 if (i >= 2 && i < rearWheelInitialLocalRotations.Length)
@@ -752,14 +1184,181 @@ public class KartController : NetworkBehaviour
         rb.constraints = RigidbodyConstraints.None;
     }
     
+    private void UpdateRespawnLogic()
+    {
+        if (splineLayer.value == 0) return;
+
+        if (!IsServer && !IsOwner) return;
+
+        if (respawnGracePeriod > 0f)
+        {
+            respawnGracePeriod -= Time.deltaTime;
+            return;
+        }
+
+        bool isOnSpline = CheckIfOnSpline();
+
+        if (isOnSpline)
+        {
+            offTrackTimer = 0f;
+            
+            if (Time.time - lastSnapshotTime > snapshotInterval)
+            {
+                lastSnapshotTime = Time.time;
+                validPositionHistory.Add(new PositionSnapshot
+                {
+                    position = transform.position,
+                    rotation = transform.rotation,
+                    timestamp = Time.time
+                });
+                float maxHistoryTime = Mathf.Max(10f, respawnBacktrackTime * 2f);
+                
+                while (validPositionHistory.Count > 0 && Time.time - validPositionHistory[0].timestamp > maxHistoryTime)
+                {
+                    validPositionHistory.RemoveAt(0);
+                }
+            }
+        }
+        else
+        {
+            offTrackTimer += Time.deltaTime;
+        }
+        if (offTrackTimer > respawnDelay || transform.position.y < fallRespawnY)
+        {
+            RespawnKart();
+        }
+    }
+
+    public void RespawnKart()
+    {
+        offTrackTimer = 0f;
+        respawnGracePeriod = 1.0f;
+        Vector3 respawnPos = transform.position;
+        Quaternion respawnRot = transform.rotation;
+        bool foundValidPos = false;
+        if (validPositionHistory.Count > 0)
+        {
+            float targetTime = Time.time - respawnBacktrackTime;
+            PositionSnapshot bestSnapshot = validPositionHistory[0];
+            float minTimeDiff = Mathf.Abs(bestSnapshot.timestamp - targetTime);
+            
+            for (int i = 0; i < validPositionHistory.Count; i++)
+            {
+                float diff = Mathf.Abs(validPositionHistory[i].timestamp - targetTime);
+                if (diff < minTimeDiff)
+                {
+                    minTimeDiff = diff;
+                    bestSnapshot = validPositionHistory[i];
+                }
+            }
+            
+            respawnPos = bestSnapshot.position;
+            respawnRot = bestSnapshot.rotation;
+            foundValidPos = true;
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+            {
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                    float t;
+                    Unity.Mathematics.float3 nearest;
+                    float dSq = UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, respawnPos, out nearest, out t);
+                    if (dSq < 100f)
+                    {
+                        Vector3 splinePos = nearest;
+                        Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                        respawnPos = new Vector3(splinePos.x, respawnPos.y, splinePos.z);
+                        if (splineTangent.magnitude > 0.1f)
+                        {
+                            splineTangent.y = 0;
+                            splineTangent.Normalize();
+                            respawnRot = Quaternion.LookRotation(splineTangent);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!foundValidPos)
+        {
+            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+            {
+                var spline = GameManager.Instance.raceTrack;
+                using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
+                {
+                    float t;
+                    Unity.Mathematics.float3 nearest;
+                    UnityEngine.Splines.SplineUtility.GetNearestPoint(nativeSpline, transform.position, out nearest, out t);
+                    
+                    Vector3 splinePos = nearest;
+                    Vector3 splineTangent = UnityEngine.Splines.SplineUtility.EvaluateTangent(nativeSpline, t);
+                    
+                    respawnPos = splinePos;
+                    if (splineTangent.magnitude > 0.1f)
+                    {
+                        splineTangent.y = 0;
+                        splineTangent.Normalize();
+                        respawnRot = Quaternion.LookRotation(splineTangent);
+                    }
+                    foundValidPos = true;
+                }
+            }
+            
+            if (!foundValidPos)
+            {
+                respawnPos = transform.position + Vector3.up * 5f;
+                Debug.LogWarning("[KartController] No valid history or spline found for respawn!");
+            }
+        }
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+
+            Vector3 finalPos = respawnPos + Vector3.up * 2.0f;
+            var netTransform = GetComponent<Unity.Netcode.Components.NetworkTransform>();
+            if (netTransform == null)
+            {
+                netTransform = GetComponentInParent<Unity.Netcode.Components.NetworkTransform>();
+            }
+            
+            bool wasEnabled = true;
+            if (netTransform != null)
+            {
+                wasEnabled = netTransform.enabled;
+                netTransform.enabled = false;
+            }
+            rb.position = finalPos;
+            rb.rotation = respawnRot;
+            transform.position = finalPos;
+            transform.rotation = respawnRot;
+            if (netTransform != null && wasEnabled)
+            {
+                StartCoroutine(ReenableNetworkTransform(netTransform));
+            }
+        }
+        else
+        {
+            transform.position = respawnPos + Vector3.up * 2.0f;
+            transform.rotation = respawnRot;
+        }
+        
+    }
+    
+    private System.Collections.IEnumerator ReenableNetworkTransform(Unity.Netcode.Components.NetworkTransform netTransform)
+    {
+        yield return null;
+        if (netTransform != null)
+        {
+            netTransform.enabled = true;
+        }
+    }
+
     private bool CheckIfOnSpline()
     {
-        // Raycast downward to detect if on spline layer
         RaycastHit hit;
         Vector3 rayOrigin = transform.position;
         Vector3 rayDirection = Vector3.down;
-        
-        // Check from kart center
         if (Physics.Raycast(rayOrigin, rayDirection, out hit, detectionDistance, splineLayer))
         {
             if (showDebugInfo && Time.frameCount % 60 == 0)
@@ -768,8 +1367,6 @@ public class KartController : NetworkBehaviour
             }
             return true;
         }
-        
-        // Check from wheel positions (more accurate)
         if (driveWheels != null && driveWheels.Length > 0)
         {
             int wheelsOnSpline = 0;
@@ -790,7 +1387,6 @@ public class KartController : NetworkBehaviour
                 Debug.Log($"[KartController] Wheel detection: {wheelsOnSpline}/{driveWheels.Length} on spline");
             }
             
-            // If at least half of the wheels are on spline, consider on spline
             return wheelsOnSpline >= driveWheels.Length / 2;
         }
         
@@ -804,7 +1400,6 @@ public class KartController : NetworkBehaviour
     
     private void UpdateSplineSpeedPenalty()
     {
-        // If splineLayer is not set, default to no speed penalty
         if (splineLayer.value == 0)
         {
             currentSpeedMultiplier = 1f;

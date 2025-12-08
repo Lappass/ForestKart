@@ -21,7 +21,7 @@ public class IntroCameraPreview : MonoBehaviour
     private Quaternion camera2StartRot;
     private float previewTime = 0f;
     private bool isPreviewing = false;
-    private int currentPhase = 0; // 0 = camera1, 1 = camera2
+    private int currentPhase = 0; 
     
 #if UNITY_EDITOR
     [ContextMenu("Preview Intro Sequence")]
@@ -112,5 +112,11 @@ public class IntroCameraPreview : MonoBehaviour
     }
 #endif
 }
+
+
+
+
+
+
 
 

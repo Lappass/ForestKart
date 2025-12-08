@@ -5,44 +5,45 @@ PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
+    serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9,
-        type: 3}
+    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
       propertyPath: m_RootOrder
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9,
-        type: 3}
+    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9,
-        type: 3}
+    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9,
-        type: 3}
+    - target: {fileID: -8679921383154817045, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: 61f1d3efd28f0c34184f3164845c00b9,
-        type: 3}
+    - target: {fileID: 919132149155446097, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
       propertyPath: m_Name
       value: DGN_Pig_Outline Variant
       objectReference: {fileID: 0}
     m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8365193281521056605}
   m_SourcePrefab: {fileID: 100100000, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
 --- !u!1 &8157189052429577767 stripped
 GameObject:
-  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 61f1d3efd28f0c34184f3164845c00b9,
-    type: 3}
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 61f1d3efd28f0c34184f3164845c00b9, type: 3}
   m_PrefabInstance: {fileID: 9076233091404010358}
   m_PrefabAsset: {fileID: 0}
 --- !u!95 &8365193281521056605
 Animator:
-  serializedVersion: 4
+  serializedVersion: 7
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -56,7 +57,14 @@ Animator:
   m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
-  m_WarningMessage: 
+  m_AnimatePhysics: 0
+  m_WarningMessage: "\nBinding warning: Some generic clip(s) animate transforms that
+    are already bound by a Humanoid avatar. These transforms can only be changed
+    by Humanoid clips.\n\tTransform 'Finger_M1.L'\n\tTransform 'Neck'\n\tTransform
+    'DGN_Armature'\n\tTransform 'Spine'\n\tTransform 'Shoulder.R'\n\tTransform 'Hand.L'\n\tTransform
+    'Leg.L'\n\tTransform 'UpperLeg.R'\n\tTransform 'Arm.R'\n\tTransform 'Hand.R'\n\tand
+    more ...\n\tFrom animation clip 'new_drive'"
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorControllerStateOnDisable: 0
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0

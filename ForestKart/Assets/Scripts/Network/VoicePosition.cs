@@ -15,7 +15,6 @@ public class VoicePosition : NetworkBehaviour
         else
         {
             timer = timerMax;
-            // Update Vivox with this GameObject's position for 3D audio
             VivoxService.Instance.Set3DPosition(gameObject, VoiceManager.Instance.ChannelName);
         }
     }

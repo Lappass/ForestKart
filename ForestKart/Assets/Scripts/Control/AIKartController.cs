@@ -8,79 +8,70 @@ public class AIKartController : NetworkBehaviour
 {
     [Header("Path Settings")]
     public SplineContainer splinePath;
-    
     [Header("AI Behavior")]
     public float targetSpeed = 0f;
-    
     [Range(0.5f, 1.5f)]
-    public float speedMultiplier = 1.0f;
-    
+    public float speedMultiplier = 1.0f; 
+    [Range(1f, 2f)]
+    public float aiSpeedBoost = 1.2f;
     public float minSpeed = 5f;
-    
     public float maxSpeed = 0f;
-    
     [Range(0.1f, 2f)]
     public float steerSensitivity = 1f;
-    
     public float lookAheadDistance = 10f;
-    
     [Range(0.1f, 1f)]
     public float speedSmoothing = 0.5f;
-    
     [Header("Handling")]
     public bool adjustRearWheelFriction = true;
     [Range(1f, 2f)]
     public float rearSidewaysFrictionMultiplier = 1.2f;
     [Range(1f, 2f)]
     public float rearForwardFrictionMultiplier = 1.1f;
-    
+    [Header("Stability Control")]
+    public bool enableStabilityControl = true;
+    [Range(0f, 20f)]
+    public float angularDamping = 6f;
+    [Range(0f, 40f)]
+    public float lateralCorrection = 15f;
+    [Range(0f, 30f)]
+    public float alignmentForce = 12f;
     [Header("Randomness")]
     public float speedVariation = 0.15f;
-    
     public float lateralRandomness = 3f;
-    
     public float speedChangeInterval = 2f;
-    
     [Header("Obstacle Avoidance")]
-    public bool enableObstacleAvoidance = true;
-    
+    public bool enableObstacleAvoidance = true; 
     public float detectionDistance = 15f;
-    
     public float avoidanceAngle = 30f;
-    
     public LayerMask obstacleLayer = -1;
     
     [Header("Overtaking")]
     public bool enableOvertaking = true;
-    
     public float overtakingDetectionDistance = 20f;
-    
     public float overtakingLaneWidth = 6f;
-    
     public float minSpeedDifferenceForOvertaking = 0.5f;
-    
     public float overtakingAccelerationMultiplier = 1.3f;
-    
     public float overtakingDuration = 4f;
-    
     public float aggressiveOvertakingDistance = 5f;
-    
+    [Header("Power Ups")]
+    public bool enablePowerUps = true;
+    [Range(0f, 1f)]
+    public float usePowerUpChance = 0.3f;
+    public float minPowerUpHoldTime = 1.0f;
     private KartController kartController;
     private Rigidbody rb;
+    private PowerUpSystem powerUpSystem;
     private float currentSplinePosition = 0f;
     private float currentSpeed = 0f;
     private float splineLength = 0f;
     private Vector3 targetPosition;
     private Vector3 targetDirection;
-    
     private int lapCount = 0;
     private float lastSplinePosition = 0f;
-    
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<float> networkSpeed = new NetworkVariable<float>(0f);
     private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
     private NetworkVariable<int> aiCharacterIndex = new NetworkVariable<int>(-1);
-    
     private bool isOvertaking = false;
     private float overtakingTimer = 0f;
     private float lateralOffset = 0f;
@@ -90,16 +81,25 @@ public class AIKartController : NetworkBehaviour
     private float randomLateralOffset = 0f;
     private float speedChangeTimer = 0f;
     private float lateralChangeTimer = 0f;
-    private bool hasPassedMidpoint = false; // Prevent lap count jitter at start
-    
-    // Obstacle avoidance state
+    private bool hasPassedMidpoint = false;
+    private float powerUpHoldTimer = 0f;
     private float baseTargetSpeed = 0f;
     private bool isAvoidingObstacle = false;
     
+    [Header("Stuck Recovery")]
+    public float stuckThresholdTime = 1.5f;
+    public float stuckRecoveryDuration = 1.0f;
+    public float stuckSpeedThreshold = 2.0f;
+    private float stuckTimer = 0f;
+    private bool isRecoveringFromStuck = false;
+    private float recoveryTimer = 0f;
+    private float recoverySteerDirection = 1f;
+
     void Start()
     {
         kartController = GetComponent<KartController>();
         rb = GetComponent<Rigidbody>();
+        powerUpSystem = GetComponent<PowerUpSystem>();
         
         FindSplinePath();
         CalculateSpeedParameters();
@@ -163,7 +163,6 @@ public class AIKartController : NetworkBehaviour
     {
         if (kartController == null) return;
         
-        // Prefer using KartController's maxSpeed to ensure AI and players use the same speed limit
         if (kartController.maxSpeed > 0f)
         {
             maxSpeed = kartController.maxSpeed * speedMultiplier;
@@ -193,7 +192,7 @@ public class AIKartController : NetworkBehaviour
         }
         
         targetSpeed = Mathf.Clamp(targetSpeed, minSpeed, maxSpeed);
-        baseTargetSpeed = targetSpeed; // Store base speed for obstacle avoidance
+        baseTargetSpeed = targetSpeed;
     }
     
     public override void OnNetworkSpawn()
@@ -208,7 +207,6 @@ public class AIKartController : NetworkBehaviour
         }
         else
         {
-            // Late join handling
             if (aiCharacterIndex.Value != -1)
             {
                 SpawnAIModel(aiCharacterIndex.Value);
@@ -256,7 +254,7 @@ public class AIKartController : NetworkBehaviour
 
     private System.Collections.IEnumerator SpawnAICharacterDelayed()
     {
-        yield return new WaitForSeconds(1.0f); // Wait for players to spawn and select
+        yield return new WaitForSeconds(1.0f);
         
         if (kartController != null && CharacterSelectionUI.Instance != null)
         {
@@ -307,7 +305,66 @@ public class AIKartController : NetworkBehaviour
         }
         
         UpdateAILogic();
+        if (enablePowerUps)
+        {
+            UpdatePowerUpLogic();
+        }
+        
+        CheckStuckBehavior();
+        
         ApplyControls();
+        
+        if (enableStabilityControl && rb != null)
+        {
+            ApplyStabilityForces();
+        }
+        
+        if (rb != null && kartController != null && kartController.controlsEnabled)
+        {
+            ApplyAISpeedBoost();
+        }
+    }
+    
+    private void ApplyAISpeedBoost()
+    {
+        if (aiSpeedBoost <= 1f) return;
+        
+        Vector3 forward = transform.forward;
+        Vector3 velocity = rb.linearVelocity;
+        float currentSpeed = velocity.magnitude;
+        
+        float desiredSpeed = targetSpeed * aiSpeedBoost;
+        desiredSpeed = Mathf.Clamp(desiredSpeed, minSpeed, maxSpeed * aiSpeedBoost);
+        
+        if (currentSpeed < desiredSpeed)
+        {
+            float speedDifference = desiredSpeed - currentSpeed;
+            float boostForce = speedDifference * 50f * (aiSpeedBoost - 1f);
+            rb.AddForce(forward * boostForce * Time.deltaTime, ForceMode.Force);
+        }
+    }
+    
+    private void UpdatePowerUpLogic()
+    {
+        if (powerUpSystem == null) return;
+        
+        if (powerUpSystem.HasPowerUp())
+        {
+            powerUpHoldTimer += Time.deltaTime;
+            
+            if (powerUpHoldTimer >= minPowerUpHoldTime)
+            {
+                if (UnityEngine.Random.value < usePowerUpChance * Time.deltaTime)
+                {
+                    powerUpSystem.UsePowerUp();
+                    powerUpHoldTimer = 0f;
+                }
+            }
+        }
+        else
+        {
+            powerUpHoldTimer = 0f;
+        }
     }
     
     private void UpdateAILogic()
@@ -362,7 +419,6 @@ public class AIKartController : NetworkBehaviour
         float previousPosition = lastSplinePosition;
         float newSplinePosition = bestT;
         
-        // Check midpoint to prevent start line jitter
         if (newSplinePosition > 0.4f && newSplinePosition < 0.6f)
         {
             hasPassedMidpoint = true;
@@ -374,7 +430,7 @@ public class AIKartController : NetworkBehaviour
             {
                 lapCount++;
                 networkLapCount.Value = lapCount;
-                hasPassedMidpoint = false; // Reset for next lap
+                hasPassedMidpoint = false;
                 Debug.Log($"[AIKart] {gameObject.name} completed lap {lapCount}! Previous: {previousPosition:F3}, New: {newSplinePosition:F3}");
             }
             else
@@ -699,16 +755,13 @@ public class AIKartController : NetworkBehaviour
         {
             isAvoidingObstacle = true;
             
-            // Calculate distance to obstacle for dynamic response
             float distanceToObstacle = hit.distance;
             float avoidanceStrength = Mathf.Clamp01(1f - (distanceToObstacle / detectionDistance));
             
-            // Use avoidanceAngle parameter to calculate directions
             float angleRad = avoidanceAngle * Mathf.Deg2Rad;
             Vector3 leftDir = (forward * Mathf.Cos(angleRad) - right * Mathf.Sin(angleRad)).normalized;
             Vector3 rightDir = (forward * Mathf.Cos(angleRad) + right * Mathf.Sin(angleRad)).normalized;
             
-            // Check left and right directions
             RaycastHit leftHit, rightHit;
             bool leftClear = !Physics.Raycast(
                 transform.position + up * 0.5f,
@@ -726,7 +779,6 @@ public class AIKartController : NetworkBehaviour
                 obstacleLayer
             );
             
-            // Check side directions for better awareness
             Vector3 leftSide = -right;
             Vector3 rightSide = right;
             RaycastHit leftSideHit, rightSideHit;
@@ -746,46 +798,38 @@ public class AIKartController : NetworkBehaviour
                 obstacleLayer
             );
             
-            // Decision making with priority
             if (leftClear && rightClear)
             {
-                // Both clear, prefer right (or check which is closer to spline path)
                 float rightStrength = Mathf.Lerp(0.2f, 0.5f, avoidanceStrength);
                 targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
             }
             else if (leftClear && leftSideClear)
             {
-                // Left is clear, turn left
                 float leftStrength = Mathf.Lerp(0.3f, 0.6f, avoidanceStrength);
                 targetDirection = Vector3.Slerp(targetDirection, leftDir, leftStrength);
             }
             else if (rightClear && rightSideClear)
             {
-                // Right is clear, turn right
                 float rightStrength = Mathf.Lerp(0.3f, 0.6f, avoidanceStrength);
                 targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
             }
             else if (leftClear)
             {
-                // Left clear but side blocked, gentle turn
                 float leftStrength = Mathf.Lerp(0.2f, 0.4f, avoidanceStrength);
                 targetDirection = Vector3.Slerp(targetDirection, leftDir, leftStrength);
             }
             else if (rightClear)
             {
-                // Right clear but side blocked, gentle turn
                 float rightStrength = Mathf.Lerp(0.2f, 0.4f, avoidanceStrength);
                 targetDirection = Vector3.Slerp(targetDirection, rightDir, rightStrength);
             }
             else
             {
-                // All blocked, slow down smoothly
                 float targetSlowSpeed = baseTargetSpeed * Mathf.Lerp(0.3f, 0.6f, distanceToObstacle / detectionDistance);
                 targetSpeed = Mathf.Lerp(targetSpeed, targetSlowSpeed, Time.deltaTime * speedSmoothing * 2f);
                 targetSpeed = Mathf.Max(targetSpeed, minSpeed);
             }
             
-            // Reduce speed based on distance to obstacle
             if (distanceToObstacle < detectionDistance * 0.5f)
             {
                 float speedReduction = Mathf.Lerp(0.5f, 0.8f, distanceToObstacle / (detectionDistance * 0.5f));
@@ -796,7 +840,6 @@ public class AIKartController : NetworkBehaviour
         }
         else
         {
-            // No obstacle ahead, restore speed smoothly
             if (isAvoidingObstacle)
             {
                 targetSpeed = Mathf.Lerp(targetSpeed, baseTargetSpeed, Time.deltaTime * speedSmoothing);
@@ -809,9 +852,66 @@ public class AIKartController : NetworkBehaviour
         }
     }
     
+    private void CheckStuckBehavior()
+    {
+        if (isRecoveringFromStuck)
+        {
+            recoveryTimer += Time.deltaTime;
+            if (recoveryTimer >= stuckRecoveryDuration)
+            {
+                isRecoveringFromStuck = false;
+                stuckTimer = 0f;
+                // Reset reverse flag is handled in ApplyControls
+            }
+            return;
+        }
+
+        // Only check for stuck if we are trying to move forward
+        if (targetSpeed > 5f && currentSpeed < stuckSpeedThreshold)
+        {
+            stuckTimer += Time.deltaTime;
+            if (stuckTimer >= stuckThresholdTime)
+            {
+                isRecoveringFromStuck = true;
+                recoveryTimer = 0f;
+                // Pick a random direction or invert current steering to unwedge
+                recoverySteerDirection = UnityEngine.Random.value > 0.5f ? 1f : -1f;
+                // Or if we have a target direction, steer opposite to it?
+                // Often random is better to shake loose.
+                Debug.Log($"[AIKart] {gameObject.name} Stuck detected! Starting recovery.");
+            }
+        }
+        else
+        {
+            stuckTimer = 0f;
+        }
+    }
+
     private void ApplyControls()
     {
         if (kartController == null) return;
+        if (!kartController.controlsEnabled)
+        {
+            kartController.gas = 0f;
+            kartController.brake = 0f;
+            kartController.steer = Vector2.zero;
+            kartController.drift = Vector2.zero;
+            return;
+        }
+
+        if (isRecoveringFromStuck)
+        {
+            kartController.reverse = true;
+            kartController.gas = 1.0f; // Full throttle backwards
+            kartController.brake = 0f;
+            kartController.steer = new Vector2(recoverySteerDirection, 0f);
+            kartController.drift = Vector2.zero;
+            return;
+        }
+        else
+        {
+            kartController.reverse = false;
+        }
         
         Vector3 localTarget = transform.InverseTransformDirection(targetDirection);
         float forwardComponent = Mathf.Max(localTarget.z, 0.01f);
@@ -822,7 +922,8 @@ public class AIKartController : NetworkBehaviour
         kartController.steer = new Vector2(steerAngle, 0);
         
         float adjustedTargetSpeed = targetSpeed + randomSpeedOffset * maxSpeed;
-        adjustedTargetSpeed = Mathf.Clamp(adjustedTargetSpeed, minSpeed, maxSpeed);
+        adjustedTargetSpeed *= aiSpeedBoost;
+        adjustedTargetSpeed = Mathf.Clamp(adjustedTargetSpeed, minSpeed, maxSpeed * aiSpeedBoost);
         
         float speedDifference = adjustedTargetSpeed - currentSpeed;
         float speedRatio = currentSpeed / adjustedTargetSpeed;
@@ -871,6 +972,52 @@ public class AIKartController : NetworkBehaviour
         kartController.drift = Vector2.zero;
     }
     
+    private void ApplyStabilityForces()
+    {
+        if (rb == null) return;
+        
+        if (angularDamping > 0f)
+        {
+            Vector3 angularVel = rb.angularVelocity;
+            float angularSpeed = angularVel.magnitude;
+            
+            if (angularSpeed > 0.1f)
+            {
+                Vector3 dampedAngular = angularVel * (1f - angularDamping * Time.deltaTime);
+                dampedAngular.y = angularVel.y * 0.95f;
+                rb.angularVelocity = dampedAngular;
+            }
+        }
+        
+        if (lateralCorrection > 0f)
+        {
+            Vector3 velocity = rb.linearVelocity;
+            Vector3 forward = transform.forward;
+            
+            float forwardSpeed = Vector3.Dot(velocity, forward);
+            Vector3 lateralVelocity = velocity - forward * forwardSpeed;
+            
+            if (lateralVelocity.magnitude > 0.5f)
+            {
+                Vector3 correctionForce = -lateralVelocity * lateralCorrection;
+                rb.AddForce(correctionForce, ForceMode.Force);
+            }
+        }
+        
+        if (alignmentForce > 0f && targetDirection.magnitude > 0.1f)
+        {
+            Vector3 currentForward = transform.forward;
+            float alignmentDot = Vector3.Dot(currentForward, targetDirection);
+            
+            if (alignmentDot < 0.95f)
+            {
+                Vector3 cross = Vector3.Cross(currentForward, targetDirection);
+                float alignmentStrength = (1f - alignmentDot) * alignmentForce;
+                rb.AddTorque(cross * alignmentStrength, ForceMode.Force);
+            }
+        }
+    }
+    
     public void SetStartPosition(float normalizedPosition)
     {
         normalizedPosition = Mathf.Clamp01(normalizedPosition);
@@ -910,7 +1057,7 @@ public class AIKartController : NetworkBehaviour
     public void SetTargetSpeed(float speed)
     {
         targetSpeed = Mathf.Clamp(speed, minSpeed, maxSpeed);
-        baseTargetSpeed = targetSpeed; // Update base speed when externally set
+        baseTargetSpeed = targetSpeed;
     }
     
     public void RecalculateSpeed()
