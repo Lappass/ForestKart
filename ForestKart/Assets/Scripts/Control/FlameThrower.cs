@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using System.Collections;
 
 public class FlameThrower : MonoBehaviour
 {
@@ -9,25 +10,35 @@ public class FlameThrower : MonoBehaviour
     
     private float stateTimer;
     private bool isFiring;
+    private Coroutine colliderCoroutine;
 
     [Header("Timing Settings")]
     public float minFireDuration = 2f;
     public float maxFireDuration = 8f;
     public float minCooldownDuration = 4f;
     public float maxCooldownDuration = 10f;
+    
+    [Header("Collider Delays")]
+    public float colliderEnableDelay = 1f;
+    public float colliderDisableDelay = 1f;
 
     private void Start()
     {
-
-        flameParticles = GetComponent<ParticleSystem>();        
+        // 1. Handle Particle System
+        flameParticles = GetComponent<ParticleSystem>();
+        // If not on this object, look in children
         if (flameParticles == null)
         {
             flameParticles = GetComponentInChildren<ParticleSystem>();
         }
+
         if (flameParticles == null)
         {
             Debug.LogWarning("[FlameThrower] No ParticleSystem found on object or children.");
         }
+
+        // 2. Handle Fire Trigger
+        // User stated: "It has a fireTrigger child object with a istrigger box collider"
         fireTrigger = transform.Find("FireTrigger");
         if (fireTrigger != null)
         {
@@ -44,6 +55,14 @@ public class FlameThrower : MonoBehaviour
         {
             Debug.LogError($"[FlameThrower] Could not find child object named 'FireTrigger' on {gameObject.name}");
         }
+        
+        // Ensure collider is initially off before starting cycle
+        if (triggerCollider != null)
+        {
+            triggerCollider.enabled = false;
+        }
+
+        // Start the cycle
         StartFiring();
     }
 
@@ -75,7 +94,9 @@ public class FlameThrower : MonoBehaviour
         
         if (triggerCollider != null) 
         {
-            triggerCollider.enabled = true;
+            // Stop any pending disable routine if rapid switching happens
+            if (colliderCoroutine != null) StopCoroutine(colliderCoroutine);
+            colliderCoroutine = StartCoroutine(EnableColliderRoutine());
         }
     }
 
@@ -91,6 +112,26 @@ public class FlameThrower : MonoBehaviour
         
         if (triggerCollider != null) 
         {
+            // Stop any pending enable routine
+            if (colliderCoroutine != null) StopCoroutine(colliderCoroutine);
+            colliderCoroutine = StartCoroutine(DisableColliderRoutine());
+        }
+    }
+    
+    private IEnumerator EnableColliderRoutine()
+    {
+        yield return new WaitForSeconds(colliderEnableDelay);
+        if (triggerCollider != null)
+        {
+            triggerCollider.enabled = true;
+        }
+    }
+    
+    private IEnumerator DisableColliderRoutine()
+    {
+        yield return new WaitForSeconds(colliderDisableDelay);
+        if (triggerCollider != null)
+        {
             triggerCollider.enabled = false;
         }
     }
@@ -98,6 +139,12 @@ public class FlameThrower : MonoBehaviour
     public void OnPlayerHitFire(KartController kart)
     {
         if (kart == null) return;
+
+        // "trigger the same logic as the player drives outside the track and respawn"
+        // This logic is encapsulated in KartController.RespawnKart()
+        
+        // We ensure we only trigger this on the client that owns the kart
+        // to prevent network fighting and ensure local prediction works.
         if (kart.IsOwner)
         {
             Debug.Log($"[FlameThrower] Player {kart.name} hit the fire! Respawning...");

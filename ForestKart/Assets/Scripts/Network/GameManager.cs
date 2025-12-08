@@ -42,6 +42,12 @@ public class GameManager : NetworkBehaviour
     
     [Header("Race Settings")]
     public int totalLaps = 3;
+
+    [Header("Audio")]
+    public AudioClip backgroundMusic;
+    [Range(0f, 1f)]
+    public float musicVolume = 0.5f;
+    private AudioSource musicAudioSource;
     
     private NetworkVariable<bool> gameStarted = new NetworkVariable<bool>(false);
     private NetworkVariable<bool> gameFinished = new NetworkVariable<bool>(false);
@@ -65,6 +71,15 @@ public class GameManager : NetworkBehaviour
             return;
         }
         Instance = this;
+
+        // Setup AudioSource
+        musicAudioSource = GetComponent<AudioSource>();
+        if (musicAudioSource == null)
+        {
+            musicAudioSource = gameObject.AddComponent<AudioSource>();
+        }
+        musicAudioSource.playOnAwake = false;
+        musicAudioSource.loop = true;
     }
     
     public override void OnNetworkSpawn()
@@ -313,6 +328,16 @@ public class GameManager : NetworkBehaviour
     [ClientRpc]
     private void PlayIntroSequenceClientRpc()
     {
+        // Start Background Music
+        if (musicAudioSource != null && backgroundMusic != null)
+        {
+             if (musicAudioSource.isPlaying) musicAudioSource.Stop();
+             musicAudioSource.clip = backgroundMusic;
+             musicAudioSource.volume = musicVolume;
+             musicAudioSource.loop = true;
+             musicAudioSource.Play();
+        }
+
         Debug.Log($"[GameManager] PlayIntroSequenceClientRpc called on client. introCamera1: {introCamera1}, introCamera2: {introCamera2}");
         if (introCamera1 == null)
         {
