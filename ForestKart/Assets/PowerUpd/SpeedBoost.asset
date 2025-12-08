@@ -16,5 +16,5 @@ MonoBehaviour:
   powerUpName: Speed Boost
   visualPrefab: {fileID: 7245894580338126750, guid: d26dd102b21843c47a13ce7f8486f5f7, type: 3}
   attachOffset: {x: 0, y: 0.5, z: -1}
-  speedMultiplier: 3
+  speedMultiplier: 2
   duration: 5
