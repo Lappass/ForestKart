@@ -29,7 +29,6 @@ public class LocalPlayerSetup : NetworkBehaviour
         base.OnNetworkSpawn();
         if (IsOwner)
         {
-            // Check if game has started - if so, intro might be playing
             bool gameStarted = false;
             bool isIntroPlaying = false;
             if (GameManager.Instance != null)
@@ -37,9 +36,6 @@ public class LocalPlayerSetup : NetworkBehaviour
                 gameStarted = GameManager.Instance.IsGameStarted();
                 isIntroPlaying = GameManager.Instance.IsPlayingIntro();
             }
-            
-            // If game just started, always assume intro is playing (network sync delay workaround)
-            // Camera will be enabled after intro ends
             if (gameStarted || isIntroPlaying)
             {
                 Debug.Log($"[LocalPlayerSetup] Game started or intro playing, disabling camera initially. gameStarted={gameStarted}, isIntroPlaying={isIntroPlaying}");
@@ -50,7 +46,6 @@ public class LocalPlayerSetup : NetworkBehaviour
                     cinemachineCamera.enabled = false;
                     cinemachineCamera.gameObject.SetActive(false);
                 }
-                // Enable audio listener but not camera
                 if (audioListener != null) audioListener.enabled = true;
             }
             else
@@ -67,8 +62,6 @@ public class LocalPlayerSetup : NetworkBehaviour
     public void SetCameraEnabled(bool isEnabled)
     {
         if (!IsOwner) return;
-        
-        // Don't enable camera if intro is playing
         bool isIntroPlaying = GameManager.Instance != null && GameManager.Instance.IsPlayingIntro();
         if (isEnabled && isIntroPlaying)
         {
@@ -82,7 +75,6 @@ public class LocalPlayerSetup : NetworkBehaviour
         {
             if (isEnabled)
             {
-                // Force toggle to ensure CinemachineBrain detects it
                 cinemachineCamera.gameObject.SetActive(false);
                 cinemachineCamera.enabled = false;
                 
@@ -95,17 +87,10 @@ public class LocalPlayerSetup : NetworkBehaviour
                 cinemachineCamera.enabled = false;
                 cinemachineCamera.gameObject.SetActive(false);
             }
-            
-            Debug.Log($"[LocalPlayerSetup] CinemachineCamera {(isEnabled ? "enabled" : "disabled")}: {cinemachineCamera.name}");
-        }
-        else
-        {
-            Debug.LogWarning("[LocalPlayerSetup] cinemachineCamera is null!");
         }
         
         if (isEnabled)
         {
-            // Also ensure other local components are enabled if they weren't
             if (audioListener != null) audioListener.enabled = true;
             foreach (var obj in localOnlyObjects)
             {
@@ -115,17 +100,14 @@ public class LocalPlayerSetup : NetworkBehaviour
     }
     private void EnableLocalComponents()
     {
-        // Don't enable camera if intro is playing or game just started
         bool isIntroPlaying = GameManager.Instance != null && GameManager.Instance.IsPlayingIntro();
         bool gameStarted = GameManager.Instance != null && GameManager.Instance.IsGameStarted();
-        
         if (cinemachineCamera != null && !isIntroPlaying && !gameStarted)
         {
             cinemachineCamera.enabled = true;
         }
         else if (cinemachineCamera != null)
         {
-            // Ensure camera stays disabled during intro
             cinemachineCamera.Priority = 0;
             cinemachineCamera.enabled = false;
             cinemachineCamera.gameObject.SetActive(false);
@@ -146,8 +128,6 @@ public class LocalPlayerSetup : NetworkBehaviour
     }
     private void DisableNonLocalComponents()
     {
-        // Force disable all PlayerInput components on non-local players (including children and parent)
-        // Check children first
         UnityEngine.InputSystem.PlayerInput[] childInputs = GetComponentsInChildren<UnityEngine.InputSystem.PlayerInput>(true);
         foreach (var input in childInputs)
         {
@@ -155,8 +135,6 @@ public class LocalPlayerSetup : NetworkBehaviour
             input.DeactivateInput();
             Debug.Log($"[LocalPlayerSetup] Disabled PlayerInput on non-local object (child): {input.gameObject.name}");
         }
-        
-        // Check parent as well, just in case LocalPlayerSetup is on a child but PlayerInput is on root
         UnityEngine.InputSystem.PlayerInput parentInput = GetComponentInParent<UnityEngine.InputSystem.PlayerInput>();
         if (parentInput != null)
         {

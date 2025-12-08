@@ -5,28 +5,14 @@ using System.Collections;
 public class PowerUpCube : NetworkBehaviour
 {
     [Header("Power Up Cube Settings")]
-    [Tooltip("Auto respawn after collection")]
     public bool autoRespawn = true;
-    
-    [Tooltip("Respawn time (seconds)")]
     public float respawnTime = 5f;
-    
-    [Tooltip("Rotation speed (degrees/second)")]
     public float rotationSpeed = 90f;
-    
-    [Tooltip("Float speed")]
     public float floatSpeed = 2f;
-    
-    [Tooltip("Float amount")]
     public float floatAmount = 0.3f;
-    
     [Header("Visual Settings")]
-    [Tooltip("Cube model (for hide/show)")]
     public GameObject cubeVisual;
-    
-    [Tooltip("Collection effect")]
     public GameObject collectEffectPrefab;
-    
     private Collider cubeCollider;
     private Vector3 startPosition;
     private float floatTimer = 0f;
@@ -132,8 +118,6 @@ public class PowerUpCube : NetworkBehaviour
         
         isCollected = true;
         networkIsCollected.Value = true;
-        
-        // Notify clients
         CollectCubeClientRpc();
         
         Debug.Log($"[PowerUpCube] {gameObject.name} collected! autoRespawn: {autoRespawn}, respawnTime: {respawnTime}");
@@ -183,14 +167,10 @@ public class PowerUpCube : NetworkBehaviour
         yield return new WaitForSeconds(respawnTime);
         
         Debug.Log($"[PowerUpCube] {gameObject.name} respawning now!");
-        
-        // Reset on server directly (already on server, no need for ServerRpc)
         floatTimer = 0f;
         transform.position = startPosition;
         isCollected = false;
         networkIsCollected.Value = false;
-        
-        // Notify clients
         RespawnCubeClientRpc();
         
         Debug.Log($"[PowerUpCube] {gameObject.name} respawned at {startPosition}");

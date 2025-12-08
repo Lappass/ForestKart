@@ -44,17 +44,12 @@ public class KartController : NetworkBehaviour
     public float maxSpeed = 0f;
     
     [Header("Spline Speed Penalty")]
-    [Tooltip("Enable speed penalty when not on spline")]
     public bool enableSplineSpeedPenalty = true;
 
     [Header("Respawn Settings")]
-    [Tooltip("Enable automatic respawn when off-track")]
     public bool enableRespawn = true;
-    [Tooltip("Time in seconds off-track before respawn")]
     public float respawnDelay = 3f;
-    [Tooltip("Y position threshold below which immediate respawn occurs")]
     public float fallRespawnY = -10f;
-    [Tooltip("How far back in time (seconds) to respawn when resetting")]
     public float respawnBacktrackTime = 2.0f;
     
     private struct PositionSnapshot
@@ -206,14 +201,12 @@ public class KartController : NetworkBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning($"[KartController] Wheel {i} or its mesh is null! Skipping rotation offset initialization.");
                 }
             }
             wheelRotationsInitialized = true;
         }
         else
         {
-            Debug.LogWarning("[KartController] driveWheels or driveWheelMeshes is null! Cannot initialize wheel rotation offsets.");
         }
         
         if (taillight != null)

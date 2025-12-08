@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 920a458b34741b647830630b67541ec3, type: 3}
   m_Name: Shell
   m_EditorClassIdentifier: 
-  type: 3
+  type: 1
   powerUpName: Shell
   visualPrefab: {fileID: 3526805715088413272, guid: 9cb41ad767963434d954b195848e982f, type: 3}
   attachOffset: {x: 0, y: 0.5, z: -1}
   shellPrefab: {fileID: 3526805715088413272, guid: 9cb41ad767963434d954b195848e982f, type: 3}
   shellSpeed: 75
-  hitForce: 3000
+  hitForce: 5000
   stunDuration: 2

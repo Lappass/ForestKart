@@ -8,24 +8,16 @@ using UnityEngine.Splines;
 public class PowerUpSystem : NetworkBehaviour
 {
     [Header("Power Up Settings")]
-    [Tooltip("Power up model attach point (rear of kart)")]
     public Transform powerUpAttachPoint;
-    
-    [Tooltip("Auto find attach point if not set")]
     public bool autoFindAttachPoint = true;
-    
-    [Tooltip("Power up list (random selection) - drag in ScriptableObject assets (.asset files, not prefabs)")]
-    public PowerUp[] availablePowerUps;
-    
+    public PowerUp[] availablePowerUps;  
     [Header("Debug")]
     public bool showDebugInfo = false;
-    
     private KartController kartController;
     private PowerUp currentPowerUp = null;
     private GameObject currentPowerUpVisual = null;
     private NetworkVariable<int> currentPowerUpTypeIndex = new NetworkVariable<int>(-1);
     private NetworkVariable<bool> hasPowerUp = new NetworkVariable<bool>(false);
-    
     private bool hasSpeedBoost = false;
     private float originalMaxSpeed = 0f;
     private float originalDriveTorque = 0f;
@@ -579,8 +571,7 @@ public class PowerUpSystem : NetworkBehaviour
         }
         
         return nearest;
-    }
-    
+    }  
     private void CreateDefaultPowerUps()
     {
         Debug.LogWarning("[PowerUpSystem] No power ups assigned! Please assign power ups in the inspector.");

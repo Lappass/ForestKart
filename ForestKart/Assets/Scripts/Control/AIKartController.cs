@@ -8,84 +8,56 @@ public class AIKartController : NetworkBehaviour
 {
     [Header("Path Settings")]
     public SplineContainer splinePath;
-    
     [Header("AI Behavior")]
     public float targetSpeed = 0f;
-    
     [Range(0.5f, 1.5f)]
-    public float speedMultiplier = 1.0f;
-    
+    public float speedMultiplier = 1.0f; 
     [Range(1f, 2f)]
     public float aiSpeedBoost = 1.2f;
-    
     public float minSpeed = 5f;
-    
     public float maxSpeed = 0f;
-    
     [Range(0.1f, 2f)]
     public float steerSensitivity = 1f;
-    
     public float lookAheadDistance = 10f;
-    
     [Range(0.1f, 1f)]
     public float speedSmoothing = 0.5f;
-    
     [Header("Handling")]
     public bool adjustRearWheelFriction = true;
     [Range(1f, 2f)]
     public float rearSidewaysFrictionMultiplier = 1.2f;
     [Range(1f, 2f)]
     public float rearForwardFrictionMultiplier = 1.1f;
-    
     [Header("Stability Control")]
     public bool enableStabilityControl = true;
-    
     [Range(0f, 20f)]
     public float angularDamping = 6f;
-    
     [Range(0f, 40f)]
     public float lateralCorrection = 15f;
-    
     [Range(0f, 30f)]
     public float alignmentForce = 12f;
-    
     [Header("Randomness")]
     public float speedVariation = 0.15f;
-    
     public float lateralRandomness = 3f;
-    
     public float speedChangeInterval = 2f;
-    
     [Header("Obstacle Avoidance")]
-    public bool enableObstacleAvoidance = true;
-    
+    public bool enableObstacleAvoidance = true; 
     public float detectionDistance = 15f;
-    
     public float avoidanceAngle = 30f;
-    
     public LayerMask obstacleLayer = -1;
     
     [Header("Overtaking")]
     public bool enableOvertaking = true;
-    
     public float overtakingDetectionDistance = 20f;
-    
     public float overtakingLaneWidth = 6f;
-    
     public float minSpeedDifferenceForOvertaking = 0.5f;
-    
     public float overtakingAccelerationMultiplier = 1.3f;
-    
     public float overtakingDuration = 4f;
-    
     public float aggressiveOvertakingDistance = 5f;
-
     [Header("Power Ups")]
     public bool enablePowerUps = true;
     [Range(0f, 1f)]
     public float usePowerUpChance = 0.3f;
     public float minPowerUpHoldTime = 1.0f;
-    
     private KartController kartController;
     private Rigidbody rb;
     private PowerUpSystem powerUpSystem;
@@ -94,15 +66,12 @@ public class AIKartController : NetworkBehaviour
     private float splineLength = 0f;
     private Vector3 targetPosition;
     private Vector3 targetDirection;
-    
     private int lapCount = 0;
     private float lastSplinePosition = 0f;
-    
     private NetworkVariable<float> networkSplinePosition = new NetworkVariable<float>(0f);
     private NetworkVariable<float> networkSpeed = new NetworkVariable<float>(0f);
     private NetworkVariable<int> networkLapCount = new NetworkVariable<int>(0);
     private NetworkVariable<int> aiCharacterIndex = new NetworkVariable<int>(-1);
-    
     private bool isOvertaking = false;
     private float overtakingTimer = 0f;
     private float lateralOffset = 0f;
@@ -114,7 +83,6 @@ public class AIKartController : NetworkBehaviour
     private float lateralChangeTimer = 0f;
     private bool hasPassedMidpoint = false;
     private float powerUpHoldTimer = 0f;
-    
     private float baseTargetSpeed = 0f;
     private bool isAvoidingObstacle = false;
     

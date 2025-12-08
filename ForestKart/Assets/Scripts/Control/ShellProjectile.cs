@@ -294,12 +294,10 @@ public class ShellProjectile : NetworkBehaviour
                 
                 if (kartNetObj != null && ownerNetObj != null)
                 {
-                    // Prevent self-hit (same NetworkObject)
                     if (kartNetObj.NetworkObjectId == ownerNetObj.NetworkObjectId)
                     {
                         isOwnerKart = true;
                     }
-                    // Prevent friendly fire for non-server clients (Server owns multiple objects so we allow interaction)
                     else if (kartNetObj.OwnerClientId == ownerNetObj.OwnerClientId)
                     {
                         if (ownerNetObj.OwnerClientId != NetworkManager.ServerClientId)

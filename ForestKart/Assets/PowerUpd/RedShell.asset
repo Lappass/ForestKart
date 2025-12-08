@@ -18,6 +18,6 @@ MonoBehaviour:
   attachOffset: {x: 0, y: 0.5, z: -1}
   redShellPrefab: {fileID: 3526805715088413272, guid: 9cb41ad767963434d954b195848e982f, type: 3}
   shellSpeed: 75
-  hitForce: 5000
-  stunDuration: 2
+  hitForce: 6000
+  stunDuration: 5
   trackingRange: 200

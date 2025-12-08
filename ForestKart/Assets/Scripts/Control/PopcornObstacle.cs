@@ -7,28 +7,19 @@ public class PopcornObstacle : NetworkBehaviour
 {
     [Header("Popcorn Settings")]
     public float stunDuration = 1.5f;
-    
     public float hitForce = 1500f;
-    
     public float hitTorque = 500f;
-    
     [Range(0f, 1f)]
     public float bounceFactor = 0.6f;
-    
     public float popcornMass = 5f;
-    
     public float minVelocityForImpact = 3f;
     
     [Header("Lifetime")]
     public float lifetime = 30f;
-    
     public bool destroyOnHit = false;
-    
     [Header("Visual Effects")]
     public GameObject hitEffectPrefab;
-    
     public AudioClip hitSound;
-    
     private Rigidbody rb;
     private Collider col;
     private AudioSource audioSource;
@@ -102,10 +93,8 @@ public class PopcornObstacle : NetworkBehaviour
         
         if (kart != null)
         {
-            // Check if game hasn't started or is in countdown
             if (GameManager.Instance != null && (GameManager.Instance.GetCountdownTime() > 0f || !GameManager.Instance.IsGameStarted()))
             {
-                // Ignore collision with the kart during countdown so it doesn't block/affect the car physically
                 if (col != null && collision.collider != null)
                 {
                     Physics.IgnoreCollision(col, collision.collider, true);

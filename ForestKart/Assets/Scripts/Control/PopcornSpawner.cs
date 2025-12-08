@@ -8,30 +8,20 @@ public class PopcornSpawner : NetworkBehaviour
 {
     [Header("Popcorn Prefab")]
     public GameObject popcornPrefab;
-    
     public SplineContainer splinePath;
-    
     [Header("Rain Settings")]
     public float spawnHeight = 25f;
-    
     public float rainSpawnRate = 10f;
-    
     [Range(0.1f, 1f)]
     public float rainCoverage = 1f;
-    
     public float rainLateralWidth = 5f;
-    
     [Header("Initial Velocity")]
     public float initialDownwardVelocity = 2f;
-    
     public float randomHorizontalVelocity = 1f;
-    
     [Header("Game Settings")]
     public bool spawnOnlyAfterGameStart = true;
-    
     [Header("Limits")]
     public int maxPopcornCount = 50;
-    
     private float splineLength = 0f;
     private List<GameObject> spawnedPopcorn = new List<GameObject>();
     private float rainSpawnTimer = 0f;

@@ -18,21 +18,16 @@ public class FlameThrower : MonoBehaviour
 
     private void Start()
     {
-        // 1. Handle Particle System
-        flameParticles = GetComponent<ParticleSystem>();
-        // If not on this object, look in children
+
+        flameParticles = GetComponent<ParticleSystem>();        
         if (flameParticles == null)
         {
             flameParticles = GetComponentInChildren<ParticleSystem>();
         }
-
         if (flameParticles == null)
         {
             Debug.LogWarning("[FlameThrower] No ParticleSystem found on object or children.");
         }
-
-        // 2. Handle Fire Trigger
-        // User stated: "It has a fireTrigger child object with a istrigger box collider"
         fireTrigger = transform.Find("FireTrigger");
         if (fireTrigger != null)
         {
@@ -49,8 +44,6 @@ public class FlameThrower : MonoBehaviour
         {
             Debug.LogError($"[FlameThrower] Could not find child object named 'FireTrigger' on {gameObject.name}");
         }
-
-        // Start the cycle
         StartFiring();
     }
 
@@ -105,12 +98,6 @@ public class FlameThrower : MonoBehaviour
     public void OnPlayerHitFire(KartController kart)
     {
         if (kart == null) return;
-
-        // "trigger the same logic as the player drives outside the track and respawn"
-        // This logic is encapsulated in KartController.RespawnKart()
-        
-        // We ensure we only trigger this on the client that owns the kart
-        // to prevent network fighting and ensure local prediction works.
         if (kart.IsOwner)
         {
             Debug.Log($"[FlameThrower] Player {kart.name} hit the fire! Respawning...");

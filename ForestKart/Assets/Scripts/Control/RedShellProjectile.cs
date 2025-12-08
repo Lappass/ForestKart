@@ -136,6 +136,10 @@ public class RedShellProjectile : NetworkBehaviour
         SetParameters(owner, initialTarget, shellSpeed, force, stun, range);
     }
     
+    private int maxBounces = 2;
+    private int bounceCount = 0;
+    private float lastBounceTime = 0f;
+
     private void FixedUpdate()
     {
         if (!IsServer) return;
@@ -151,12 +155,15 @@ public class RedShellProjectile : NetworkBehaviour
 
         if (targetTransform != null && targetTransform.gameObject.activeInHierarchy)
         {
+            float distanceToTarget = Vector3.Distance(transform.position, targetTransform.position);
             Vector3 directionToTarget = (targetTransform.position - transform.position).normalized;
             directionToTarget.y = 0; 
             
             Vector3 desiredDir = directionToTarget;
             bool usingSpline = false;
-            if (GameManager.Instance != null && GameManager.Instance.raceTrack != null)
+            bool terminalGuidance = distanceToTarget < 25f;
+
+            if (!terminalGuidance && GameManager.Instance != null && GameManager.Instance.raceTrack != null)
             {
                 var spline = GameManager.Instance.raceTrack;
                 using (var nativeSpline = new UnityEngine.Splines.NativeSpline(spline.Spline, spline.transform.localToWorldMatrix, Unity.Collections.Allocator.Temp))
@@ -175,15 +182,25 @@ public class RedShellProjectile : NetworkBehaviour
                         if (Vector3.Dot(splineTangent, currentForward) < 0) splineTangent = -splineTangent;
                         splineTangent.y = 0;
                         splineTangent.Normalize();
-                        
-                        desiredDir = (splineTangent * 0.7f + directionToTarget * 0.3f).normalized;
+                        float targetWeight = Mathf.Lerp(0.3f, 0.8f, 1f - (distanceToTarget / 100f));
+                        desiredDir = (splineTangent * (1f - targetWeight) + directionToTarget * targetWeight).normalized;
                     }
                 }
             }
-            
+
+            if (Physics.Raycast(transform.position, transform.forward, out RaycastHit wallHit, 5f, LayerMask.GetMask("Default", "Ground")))
+            {
+                if (wallHit.collider.tag == "Wall" || wallHit.collider.gameObject.layer == LayerMask.NameToLayer("Default"))
+                {
+                     Vector3 avoidDir = Vector3.ProjectOnPlane(transform.forward, wallHit.normal).normalized;
+                     desiredDir = Vector3.Slerp(desiredDir, avoidDir, 0.8f); 
+                }
+            }
+
             Vector3 currentVelocity = rb.linearVelocity;
             currentVelocity.y = 0;
-            Vector3 desiredVelocity = Vector3.Slerp(currentVelocity.normalized, desiredDir, Time.fixedDeltaTime * trackingStrength) * speed;
+            float currentTrackingStrength = terminalGuidance ? trackingStrength * 3f : trackingStrength;
+            Vector3 desiredVelocity = Vector3.Slerp(currentVelocity.normalized, desiredDir, Time.fixedDeltaTime * currentTrackingStrength) * speed;
             desiredVelocity.y = rb.linearVelocity.y; 
             if (!Physics.Raycast(transform.position, Vector3.down, 1.0f))
             {
@@ -199,7 +216,7 @@ public class RedShellProjectile : NetworkBehaviour
             if (desiredDir.magnitude > 0.1f)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(desiredDir);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * trackingStrength);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * currentTrackingStrength);
             }
         }
         else
@@ -239,8 +256,6 @@ public class RedShellProjectile : NetworkBehaviour
                     }
                 }
             }
-            
-            // 3. Fallback: Simple forward movement
             if (!followingSpline)
             {
                 Vector3 forward = transform.forward;
@@ -349,8 +364,6 @@ public class RedShellProjectile : NetworkBehaviour
             {
                 continue;
             }
-            
-            // Ignore owner during spawn grace period
             if (Time.time - spawnTime < ignoreOwnerTime)
             {
                 if (col.transform == ownerTransform || 
@@ -417,8 +430,29 @@ public class RedShellProjectile : NetworkBehaviour
         if (other.gameObject.layer == LayerMask.NameToLayer("Default") || 
             other.tag == "Wall" || other.tag == "Obstacle")
         {
-            Debug.Log($"[RedShellProjectile] Hit wall/obstacle: {other.gameObject.name}");
-            DestroyShell();
+            if (Time.time - lastBounceTime > 0.1f)
+            {
+                bounceCount++;
+                lastBounceTime = Time.time;
+                RaycastHit hit;
+                Vector3 normal = (transform.position - other.ClosestPoint(transform.position)).normalized;
+                if (Physics.Raycast(transform.position - transform.forward, transform.forward, out hit, 2f))
+                {
+                    normal = hit.normal;
+                }
+                
+                rb.linearVelocity = Vector3.Reflect(rb.linearVelocity, normal);
+                
+                if (bounceCount > maxBounces)
+                {
+                    Debug.Log($"[RedShellProjectile] Hit wall too many times ({bounceCount}), destroying.");
+                    DestroyShell();
+                }
+                else
+                {
+                     Debug.Log($"[RedShellProjectile] Bounced off wall. Count: {bounceCount}");
+                }
+            }
         }
     }
     
