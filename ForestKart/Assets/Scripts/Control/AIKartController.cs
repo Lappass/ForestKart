@@ -86,6 +86,15 @@ public class AIKartController : NetworkBehaviour
     private float baseTargetSpeed = 0f;
     private bool isAvoidingObstacle = false;
     
+    [Header("Stuck Recovery")]
+    public float stuckThresholdTime = 1.5f;
+    public float stuckRecoveryDuration = 1.0f;
+    public float stuckSpeedThreshold = 2.0f;
+    private float stuckTimer = 0f;
+    private bool isRecoveringFromStuck = false;
+    private float recoveryTimer = 0f;
+    private float recoverySteerDirection = 1f;
+
     void Start()
     {
         kartController = GetComponent<KartController>();
@@ -300,6 +309,9 @@ public class AIKartController : NetworkBehaviour
         {
             UpdatePowerUpLogic();
         }
+        
+        CheckStuckBehavior();
+        
         ApplyControls();
         
         if (enableStabilityControl && rb != null)
@@ -840,6 +852,41 @@ public class AIKartController : NetworkBehaviour
         }
     }
     
+    private void CheckStuckBehavior()
+    {
+        if (isRecoveringFromStuck)
+        {
+            recoveryTimer += Time.deltaTime;
+            if (recoveryTimer >= stuckRecoveryDuration)
+            {
+                isRecoveringFromStuck = false;
+                stuckTimer = 0f;
+                // Reset reverse flag is handled in ApplyControls
+            }
+            return;
+        }
+
+        // Only check for stuck if we are trying to move forward
+        if (targetSpeed > 5f && currentSpeed < stuckSpeedThreshold)
+        {
+            stuckTimer += Time.deltaTime;
+            if (stuckTimer >= stuckThresholdTime)
+            {
+                isRecoveringFromStuck = true;
+                recoveryTimer = 0f;
+                // Pick a random direction or invert current steering to unwedge
+                recoverySteerDirection = UnityEngine.Random.value > 0.5f ? 1f : -1f;
+                // Or if we have a target direction, steer opposite to it?
+                // Often random is better to shake loose.
+                Debug.Log($"[AIKart] {gameObject.name} Stuck detected! Starting recovery.");
+            }
+        }
+        else
+        {
+            stuckTimer = 0f;
+        }
+    }
+
     private void ApplyControls()
     {
         if (kartController == null) return;
@@ -850,6 +897,20 @@ public class AIKartController : NetworkBehaviour
             kartController.steer = Vector2.zero;
             kartController.drift = Vector2.zero;
             return;
+        }
+
+        if (isRecoveringFromStuck)
+        {
+            kartController.reverse = true;
+            kartController.gas = 1.0f; // Full throttle backwards
+            kartController.brake = 0f;
+            kartController.steer = new Vector2(recoverySteerDirection, 0f);
+            kartController.drift = Vector2.zero;
+            return;
+        }
+        else
+        {
+            kartController.reverse = false;
         }
         
         Vector3 localTarget = transform.InverseTransformDirection(targetDirection);

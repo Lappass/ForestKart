@@ -444,7 +444,8 @@ public class KartController : NetworkBehaviour
             if (animator != null)
             {
                 animator.applyRootMotion = false;
-                animator.enabled = false;
+                animator.enabled = true;
+                animator.Play("drive");
             }
             
             currentDriverModel.transform.localPosition = driverModelPositionOffset;
@@ -789,6 +790,11 @@ public class KartController : NetworkBehaviour
     
     public void OnHitByProjectile(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
         bool isAI = GetComponent<AIKartController>() != null || 
                     GetComponentInParent<AIKartController>() != null ||
                     transform.root.GetComponent<AIKartController>() != null;
@@ -812,6 +818,11 @@ public class KartController : NetworkBehaviour
     
     public void OnEnterWaterPuddle(float blurDuration)
     {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
         if (!IsOwner) return;
         
         AIKartController aiController = GetComponent<AIKartController>();
@@ -825,6 +836,11 @@ public class KartController : NetworkBehaviour
     
     public void OnHitByPopcorn(Vector3 hitDirection, float force, float torque, float stunDuration)
     {
+        if (GameManager.Instance != null && (GameManager.Instance.IsPlayingIntro() || GameManager.Instance.GetCountdownTime() > 0f))
+        {
+            return;
+        }
+
         bool isAI = GetComponent<AIKartController>() != null || 
                     GetComponentInParent<AIKartController>() != null ||
                     transform.root.GetComponent<AIKartController>() != null;
