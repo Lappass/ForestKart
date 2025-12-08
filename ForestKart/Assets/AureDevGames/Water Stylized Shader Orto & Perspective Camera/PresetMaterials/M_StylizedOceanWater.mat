@@ -101,7 +101,7 @@ Material:
     - _CaveBlend: 0
     - _CaveDistortion: 0
     - _DepthCompareDistance: 0.1
-    - _DepthFadeDistance: 10
+    - _DepthFadeDistance: 5
     - _FoamBlend: 0.09
     - _FresnelPower: 1
     - _GradientRefractionScale: 10
