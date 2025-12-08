@@ -3,8 +3,10 @@ Shader "Custom/BlurShader"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _BlurSize ("Blur Size", Range(0, 10)) = 1
+        _BlurSize ("Blur Size", Range(0, 20)) = 10
         _Intensity ("Intensity", Range(0, 1)) = 1
+        _DistortionStrength ("Distortion Strength", Range(0, 0.1)) = 0.02
+        _DistortionSpeed ("Distortion Speed", Range(0, 10)) = 3.0
     }
     SubShader
     {
@@ -39,6 +41,8 @@ Shader "Custom/BlurShader"
             float4 _MainTex_TexelSize;
             float _BlurSize;
             float _Intensity;
+            float _DistortionStrength;
+            float _DistortionSpeed;
             
             v2f vert (appdata v)
             {
@@ -51,6 +55,15 @@ Shader "Custom/BlurShader"
             fixed4 frag (v2f i) : SV_Target
             {
                 float2 uv = i.uv;
+                
+                // Add distortion
+                float time = _Time.y * _DistortionSpeed;
+                float2 distortion = float2(
+                    sin(uv.y * 10.0 + time) * _DistortionStrength,
+                    cos(uv.x * 10.0 + time) * _DistortionStrength
+                );
+                uv += distortion;
+                
                 float4 color = float4(0, 0, 0, 0);
                 float totalWeight = 0;
                 

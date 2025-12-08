@@ -135,6 +135,11 @@ public class ScreenBlurEffect : MonoBehaviour
             {
                 blurMaterial.SetFloat("_Intensity", 1f);
             }
+            if (blurMaterial.HasProperty("_DistortionStrength"))
+            {
+                // Scale distortion with blur intensity
+                blurMaterial.SetFloat("_DistortionStrength", 0.02f * currentBlurIntensity);
+            }
             
             RenderTexture tempBlur = RenderTexture.GetTemporary(blurRenderTexture.width, blurRenderTexture.height, 0);
             Graphics.Blit(tempRenderTexture, tempBlur, blurMaterial);
