@@ -80,27 +80,27 @@ public class LeaderboardUI : MonoBehaviour
         }
         
         if (gameManager == null) return;
-        
-        updateTimer += Time.deltaTime;
-        if (updateTimer >= updateInterval)
+
+        // Check visibility condition every frame for responsiveness
+        bool shouldShow = Input.GetKey(KeyCode.Tab) || gameManager.ShouldShowLeaderboard();
+
+        if (shouldShow && !isShowing)
         {
-            updateTimer = 0f;
-            
-            UpdateLeaderboard();
-            
-            if (gameManager.ShouldShowLeaderboard())
+            ShowLeaderboard();
+        }
+        else if (!shouldShow && isShowing)
+        {
+            HideLeaderboard();
+        }
+        
+        // Update content periodically only when showing
+        if (isShowing)
+        {
+            updateTimer += Time.deltaTime;
+            if (updateTimer >= updateInterval)
             {
-                if (!isShowing)
-                {
-                    ShowLeaderboard();
-                }
-            }
-            else
-            {
-                if (isShowing)
-                {
-                    HideLeaderboard();
-                }
+                updateTimer = 0f;
+                UpdateLeaderboard();
             }
         }
     }
